@@ -1,0 +1,16 @@
+<%- include('partials/header') %>
+<div class="card auth">
+  <h1>Request access</h1>
+  <p class="muted">Tell us who you are. An AI Ninjas admin will approve your account, usually within one business day.</p>
+  <% if (typeof error !== 'undefined' && error) { %><p class="error"><%= error %></p><% } %>
+  <form method="post" action="/request-access">
+    <label>Full name</label><input type="text" name="name" required value="<%= values.name || '' %>">
+    <label>Email</label><input type="email" name="email" required value="<%= values.email || '' %>">
+    <label>Choose a password</label><input type="password" name="password" required minlength="8" placeholder="At least 8 characters">
+    <label>School / organization</label><input type="text" name="organization" value="<%= values.organization || '' %>" placeholder="e.g. Lincoln High School">
+    <label>Why do you want access? <span class="muted">(optional)</span></label><textarea name="note"><%= values.note || '' %></textarea>
+    <p><button class="btn" style="width:100%">Submit request</button></p>
+  </form>
+  <p class="muted small">By requesting access you agree to the <a href="<%= mainSite %>/privacy">privacy policy</a>. Already approved? <a href="/login">Log in</a>.</p>
+</div>
+<%- include('partials/footer') %>

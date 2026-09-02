@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest identifier="com.aininjas.foundations.sample" version="1.0"
+  xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
+  xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.imsproject.org/xsd/imscp_rootv1p1p2 imscp_rootv1p1p2.xsd http://www.imsglobal.org/xsd/imsmd_rootv1p2p1 imsmd_rootv1p2p1.xsd http://www.adlnet.org/xsd/adlcp_rootv1p2 adlcp_rootv1p2.xsd">
+  <metadata><schema>ADL SCORM</schema><schemaversion>1.2</schemaversion></metadata>
+  <organizations default="org1">
+    <organization identifier="org1">
+      <title>AI Ninjas — Foundations Sample</title>
+      <item identifier="item_intro" identifierref="res_intro"><title>1. What AI actually is</title></item>
+      <item identifier="item_quiz" identifierref="res_quiz"><title>2. AI apps vs. regular apps (quiz)</title><adlcp:masteryscore>70</adlcp:masteryscore></item>
+      <item identifier="item_wrap" identifierref="res_wrap"><title>3. Your Ninja Path</title></item>
+    </organization>
+  </organizations>
+  <resources>
+    <resource identifier="res_intro" type="webcontent" adlcp:scormtype="sco" href="intro.html"><file href="intro.html"/><file href="shared/scorm.js"/></resource>
+    <resource identifier="res_quiz" type="webcontent" adlcp:scormtype="sco" href="quiz.html"><file href="quiz.html"/><file href="shared/scorm.js"/></resource>
+    <resource identifier="res_wrap" type="webcontent" adlcp:scormtype="sco" href="wrap.html"><file href="wrap.html"/><file href="shared/scorm.js"/></resource>
+  </resources>
+</manifest>

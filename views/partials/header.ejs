@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><%= title %> · <%= siteName %></title>
+<link rel="icon" type="image/png" href="/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="<%= mainSite %>"><img src="/logo.png" alt="AI Ninjas"><span class="tag">Academy</span></a>
+  <nav>
+    <% if (user && user.status === 'approved') { %>
+      <a href="/dashboard" class="<%= path === '/dashboard' ? 'active' : '' %>">My courses</a>
+      <% pluginNav.forEach(n => { %><a href="<%= n.href %>" class="<%= path.startsWith(n.href) ? 'active' : '' %>"><%= n.label %></a><% }) %>
+      <% if (user.role === 'admin') { %><a href="/admin" class="<%= path.startsWith('/admin') ? 'active' : '' %>">Admin</a><% } %>
+      <a href="/profile" class="<%= path === '/profile' ? 'active' : '' %>"><%= user.name %></a>
+      <form method="post" action="/logout" class="inline"><button class="link">Log out</button></form>
+    <% } else if (user) { %>
+      <form method="post" action="/logout" class="inline"><button class="link">Log out</button></form>
+    <% } else { %>
+      <a href="<%= mainSite %>">aininjas.com</a>
+      <a href="/login">Log in</a>
+      <a href="/request-access" class="btn small">Request access</a>
+    <% } %>
+  </nav>
+</header>
+<main class="container">
+<% if (flash) { %><div class="flash <%= flash.type %>"><%= flash.message %></div><% } %>

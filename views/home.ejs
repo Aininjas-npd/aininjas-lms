@@ -1,0 +1,15 @@
+<%- include('partials/header') %>
+<section class="hero">
+  <span class="slash"></span>
+  <h1>Your training ground.</h1>
+  <p>The AI Ninjas learning platform. Request access, get approved by your school or by us, and work through the modules at your own pace — every lesson tracked, every belt earned.</p>
+  <a class="btn" href="/request-access">Request access</a> &nbsp; <a class="btn ghost" href="/login">I already have an account</a>
+</section>
+<h2>Courses</h2>
+<div class="grid">
+<% courses.forEach(c => { %>
+  <div class="card"><h3><%= c.title %></h3><p class="muted"><%= c.description || 'SCORM course' %></p></div>
+<% }) %>
+<% if (!courses.length) { %><p class="muted">No courses published yet.</p><% } %>
+</div>
+<%- include('partials/footer') %>

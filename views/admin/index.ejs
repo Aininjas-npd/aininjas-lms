@@ -1,0 +1,23 @@
+<%- include('../partials/header') %>
+<h1>Admin dashboard</h1>
+<div class="stats">
+  <div class="stat"><b><%= stats.pending %></b><span>Pending access requests</span></div>
+  <div class="stat"><b><%= stats.pendingEnrollments %></b><span>Pending course requests</span></div>
+  <div class="stat"><b><%= stats.users %></b><span>Approved learners</span></div>
+  <div class="stat"><b><%= stats.courses %></b><span>Courses</span></div>
+  <div class="stat"><b><%= stats.completions %></b><span>Course completions</span></div>
+  <div class="stat"><b><%= stats.launches7d %></b><span>Lesson launches (7d)</span></div>
+</div>
+<p class="actions"><a class="btn" href="/admin/courses">📦 Courses & upload</a> <a class="btn ghost" href="/admin/users">👥 Users & access requests</a></p>
+<div class="grid" style="grid-template-columns:2fr 1fr">
+  <div class="card"><h3>Recent activity</h3>
+    <table class="table"><tbody>
+    <% recent.forEach(e => { %><tr><td class="muted small"><%= e.created_at %></td><td><%= e.user_name || '—' %></td><td><span class="badge"><%= e.type %></span></td><td class="small"><%= e.course_title || '' %><%= e.sco_title ? ' › ' + e.sco_title : '' %></td></tr><% }) %>
+    </tbody></table>
+  </div>
+  <div>
+    <% widgets.forEach(w => { %><%- w %><% }) %>
+    <div class="card"><h3>Plugins</h3><% plugins.forEach(p => { %><p><strong><%= p.name %></strong><br><span class="muted small"><%= p.description %></span></p><% }) %></div>
+  </div>
+</div>
+<%- include('../partials/footer') %>

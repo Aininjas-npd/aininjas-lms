@@ -1,0 +1,8 @@
+<%- include('partials/header') %>
+<div class="card auth" style="text-align:center">
+  <h1>⏳ Almost there</h1>
+  <p>Thanks, <%= user.name %>! Your access request is <span class="badge <%= user.status %>"><%= user.status %></span>.</p>
+  <% if (user.status === 'pending') { %><p class="muted">An admin will review it shortly. You'll be able to log in and start your courses as soon as it's approved.</p>
+  <% } else { %><p class="muted">Your request was not approved. If you think this is a mistake, contact <a href="mailto:info@aininjas.com">info@aininjas.com</a>.</p><% } %>
+</div>
+<%- include('partials/footer') %>

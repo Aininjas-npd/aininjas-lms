@@ -1,0 +1,23 @@
+<%- include('../partials/header') %>
+<div class="row between wrap"><h1>Users & access requests</h1>
+  <form method="post" action="/admin/settings" class="row gap"><label class="check" style="margin:0"><input type="checkbox" name="auto_approve" <%= autoApprove ? 'checked' : '' %> onchange="this.form.submit()"> Auto-approve new sign-ups</label></form></div>
+<p class="actions"><% ['all','pending','approved','rejected','disabled'].forEach(f => { %><a class="btn small <%= filter === f ? '' : 'ghost' %>" href="/admin/users?status=<%= f %>"><%= f %></a><% }) %></p>
+<table class="table"><thead><tr><th>User</th><th>Organization / note</th><th>Status</th><th>Courses</th><th>Actions</th></tr></thead><tbody>
+<% users.forEach(u => { %>
+  <tr><td><strong><%= u.name %></strong> <% if (u.role === 'admin') { %><span class="badge">admin</span><% } %><br><span class="muted small"><%= u.email %><%= u.google_id ? ' · Google' : '' %> · joined <%= u.created_at.slice(0,10) %></span></td>
+    <td class="small"><%= u.organization || '' %><% if (u.request_note) { %><br><span class="muted">“<%= u.request_note %>”</span><% } %></td>
+    <td><span class="badge <%= u.status %>"><%= u.status %></span></td>
+    <td class="small"><% u.enrollments.forEach(e => { %><div><%= e.title %> <span class="badge <%= e.status %>"><%= e.status %></span>
+        <% if (e.status === 'requested') { %><form class="inline" method="post" action="/admin/enrollments/<%= e.id %>/approve"><button class="btn small ok">Grant</button></form><% } %>
+        <% if (e.status === 'active') { %><form class="inline" method="post" action="/admin/enrollments/<%= e.id %>/revoke"><button class="link small">revoke</button></form><% } %></div><% }) %>
+      <form method="post" action="/admin/enrollments" class="row gap" style="margin-top:4px"><input type="hidden" name="user_id" value="<%= u.id %>">
+        <select name="course_id" style="width:auto"><% courses.forEach(c => { %><option value="<%= c.id %>"><%= c.title %></option><% }) %></select><button class="btn small ghost">+ enroll</button></form></td>
+    <td class="actions">
+      <% if (u.status === 'pending') { %><form method="post" action="/admin/users/<%= u.id %>/approve"><button class="btn small ok">Approve</button></form><form method="post" action="/admin/users/<%= u.id %>/reject"><button class="btn small danger">Reject</button></form><% } %>
+      <% if (u.status === 'approved' && u.id !== user.id) { %><form method="post" action="/admin/users/<%= u.id %>/disable"><button class="btn small ghost">Disable</button></form><% } %>
+      <% if (['disabled','rejected'].includes(u.status)) { %><form method="post" action="/admin/users/<%= u.id %>/enable"><button class="btn small ghost">Re-enable</button></form><% } %>
+      <% if (u.role !== 'admin') { %><form method="post" action="/admin/users/<%= u.id %>/make-admin"><button class="link small">make admin</button></form><% } else if (u.id !== user.id) { %><form method="post" action="/admin/users/<%= u.id %>/make-learner"><button class="link small">remove admin</button></form><% } %>
+    </td></tr>
+<% }) %>
+</tbody></table>
+<%- include('../partials/footer') %>

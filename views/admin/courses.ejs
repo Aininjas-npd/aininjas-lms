@@ -1,0 +1,23 @@
+<%- include('../partials/header') %>
+<h1>Courses</h1>
+<div class="card">
+  <h3>Upload a SCORM 1.2 package</h3>
+  <form method="post" action="/admin/courses/upload" enctype="multipart/form-data">
+    <label>Package (.zip exported as SCORM 1.2 from Articulate, iSpring, Captivate, Genially, etc.)</label><input type="file" name="package" accept=".zip" required>
+    <label>Title <span class="muted">(optional — defaults to the manifest title)</span></label><input type="text" name="title">
+    <label>Description <span class="muted">(optional)</span></label><textarea name="description"></textarea>
+    <label class="check"><input type="checkbox" name="open_enrollment"> Open enrollment — any approved learner can self-enroll (otherwise they request and you approve)</label>
+    <p><button class="btn">Upload & import</button></p>
+  </form>
+</div>
+<table class="table"><thead><tr><th>Course</th><th>SCOs</th><th>Enrolled</th><th>Completed</th><th>Published</th><th>Enrollment</th><th></th></tr></thead><tbody>
+<% courses.forEach(c => { %>
+  <tr><td><a href="/admin/courses/<%= c.id %>"><strong><%= c.title %></strong></a><br><span class="muted small">v<%= c.version %> · <%= c.slug %></span></td>
+    <td><%= c.scoCount %></td><td><%= c.enrolled %></td><td><%= c.completed %></td>
+    <td><form method="post" action="/admin/courses/<%= c.id %>/toggle" class="inline"><input type="hidden" name="field" value="is_published"><button class="link"><span class="badge <%= c.is_published ? 'active' : '' %>"><%= c.is_published ? 'published' : 'hidden' %></span></button></form></td>
+    <td><form method="post" action="/admin/courses/<%= c.id %>/toggle" class="inline"><input type="hidden" name="field" value="open_enrollment"><button class="link"><span class="badge <%= c.open_enrollment ? 'active' : 'pending' %>"><%= c.open_enrollment ? 'open' : 'approval required' %></span></button></form></td>
+    <td class="actions"><a class="btn small ghost" href="/admin/courses/<%= c.id %>">Report</a><a class="btn small ghost" href="/admin/courses/<%= c.id %>/export.csv">CSV</a>
+      <form method="post" action="/admin/courses/<%= c.id %>/delete" onsubmit="return confirm('Delete this course and all progress?')"><button class="btn small danger">Delete</button></form></td></tr>
+<% }) %>
+</tbody></table>
+<%- include('../partials/footer') %>

@@ -1,0 +1,27 @@
+<%- include('../partials/header') %>
+<a href="/admin/courses" class="muted small">← Courses</a>
+<div class="row between wrap"><h1><%= course.title %></h1><a class="btn ghost small" href="/admin/courses/<%= course.id %>/export.csv">⬇ Export CSV</a></div>
+<div class="card"><h3>Lesson heat-map <span class="muted small">(hardest lessons first)</span></h3>
+  <table class="table"><thead><tr><th>Lesson</th><th>Launch file</th><th class="num">Attempted</th><th class="num">Completed</th><th class="num">Avg score</th><th class="num">Avg time</th></tr></thead><tbody>
+  <% heat.slice().sort((a,b)=>(a.avg_score??101)-(b.avg_score??101)).forEach(h => { %>
+    <tr><td><%= h.title %></td><td class="small muted"><%= h.launch_href %></td><td class="num"><%= h.attempts %></td><td class="num"><%= h.done || 0 %></td><td class="num"><%= h.avg_score != null ? Math.round(h.avg_score) : '—' %></td><td class="num"><%= h.avg_secs ? Math.round(h.avg_secs/60) + ' min' : '—' %></td></tr>
+  <% }) %></tbody></table>
+</div>
+<div class="card"><h3>Learners</h3>
+  <table class="table"><thead><tr><th>Learner</th><th>Access</th><th>Progress</th><th class="num">Avg score</th><th class="num">Time</th><th>Completed</th><th></th></tr></thead><tbody>
+  <% learners.forEach(l => { const s = l.summary; %>
+    <tr><td><strong><%= l.name %></strong><br><span class="muted small"><%= l.email %><%= l.organization ? ' · ' + l.organization : '' %></span></td>
+      <td><span class="badge <%= l.enrollment_status %>"><%= l.enrollment_status %></span></td>
+      <td style="min-width:160px"><div class="progress"><i style="width:<%= s.percent %>%"></i></div><span class="small muted"><%= s.done %>/<%= s.total %> · <%= s.percent %>%</span></td>
+      <td class="num"><%= s.avgScore ?? '—' %></td><td class="num"><%= Math.round(s.seconds/60) %> min</td><td class="small"><%= l.completed_at || '—' %></td>
+      <td class="actions">
+        <% if (l.enrollment_status !== 'active') { %><form method="post" action="/admin/enrollments"><input type="hidden" name="user_id" value="<%= l.id %>"><input type="hidden" name="course_id" value="<%= course.id %>"><button class="btn small ok">Grant</button></form><% } else { %>
+        <form method="post" action="/admin/progress/reset" onsubmit="return confirm('Reset this learner\'s progress?')"><input type="hidden" name="user_id" value="<%= l.id %>"><input type="hidden" name="course_id" value="<%= course.id %>"><button class="btn small ghost">Reset</button></form><% } %>
+      </td></tr>
+  <% }) %></tbody></table>
+  <% if (allUsers.length) { %>
+  <form method="post" action="/admin/enrollments" class="row gap" style="margin-top:14px"><input type="hidden" name="course_id" value="<%= course.id %>">
+    <select name="user_id"><% allUsers.forEach(u => { %><option value="<%= u.id %>"><%= u.name %> (<%= u.email %>)</option><% }) %></select><button class="btn small">Enroll learner</button></form>
+  <% } %>
+</div>
+<%- include('../partials/footer') %>

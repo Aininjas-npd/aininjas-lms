@@ -1,0 +1,29 @@
+<%- include('partials/header') %>
+<p class="eyebrow">My courses</p>
+<h1>Welcome back, <%= user.name.split(' ')[0] %>.</h1>
+<p class="muted">Your courses and progress.</p>
+<div class="grid">
+<% mine.forEach(e => { const s = e.summary; %>
+  <div class="card">
+    <div class="row between"><h3><%= e.title %></h3><span class="badge <%= e.status === 'active' ? s.status : e.status %>"><%= e.status === 'active' ? s.status.replace('_',' ') : e.status %></span></div>
+    <p class="muted small"><%= e.description || '' %></p>
+    <% if (e.status === 'active') { %>
+      <div class="progress"><i style="width:<%= s.percent %>%"></i></div>
+      <p class="small muted"><%= s.done %>/<%= s.total %> lessons · <%= s.percent %>% <% if (s.avgScore != null) { %>· avg score <%= s.avgScore %><% } %></p>
+      <a class="btn small" href="/courses/<%= e.course_id %>"><%= s.status === 'not_started' ? 'Start course' : s.status === 'completed' ? 'Review' : 'Continue' %></a>
+    <% } else if (e.status === 'requested') { %><p class="small muted">Waiting for an admin to grant access.</p><% } %>
+  </div>
+<% }) %>
+</div>
+<% if (!mine.length) { %><p class="muted">You're not enrolled in any course yet — pick one below.</p><% } %>
+<% if (catalog.length) { %>
+<h2>Available courses</h2>
+<div class="grid">
+<% catalog.forEach(c => { %>
+  <div class="card"><h3><%= c.title %></h3><p class="muted small"><%= c.description || '' %></p>
+    <form method="post" action="/courses/<%= c.id %>/enroll"><button class="btn small"><%= c.open_enrollment ? 'Enroll' : 'Request access' %></button></form></div>
+<% }) %>
+</div>
+<% } %>
+<% widgets.forEach(w => { %><%- w %><% }) %>
+<%- include('partials/footer') %>

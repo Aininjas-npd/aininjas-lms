@@ -1,0 +1,21 @@
+<%- include('partials/header') %>
+<a href="/dashboard" class="muted small">← My courses</a>
+<h1><%= course.title %></h1>
+<p class="muted"><%= course.description || '' %></p>
+<div class="card">
+  <div class="row between"><strong>Progress</strong><span class="badge <%= summary.status %>"><%= summary.status.replace('_',' ') %></span></div>
+  <div class="progress"><i style="width:<%= summary.percent %>%"></i></div>
+  <p class="small muted"><%= summary.done %>/<%= summary.total %> lessons complete · <%= Math.round(summary.seconds/60) %> min spent<% if (summary.avgScore != null) { %> · average score <%= summary.avgScore %><% } %></p>
+</div>
+<div class="card">
+  <h3>Lessons</h3>
+  <table class="table"><thead><tr><th>#</th><th>Lesson</th><th>Status</th><th class="num">Score</th><th class="num">Time</th><th></th></tr></thead><tbody>
+  <% summary.rows.forEach((r, i) => { const st = r.lesson_status || 'not attempted'; %>
+    <tr><td><%= i+1 %></td><td><%= r.title %></td><td><span class="badge <%= st.replace(' ','_') %>"><%= st %></span></td>
+      <td class="num"><%= r.score_raw != null ? r.score_raw : '—' %></td><td class="num"><%= Math.round((r.total_seconds||0)/60) %> min</td>
+      <td class="num"><a class="btn small <%= ['completed','passed'].includes(st) ? 'ghost' : '' %>" href="/courses/<%= course.id %>/play/<%= r.sco_id %>"><%= st === 'not attempted' ? 'Start' : ['completed','passed'].includes(st) ? 'Review' : 'Resume' %></a></td></tr>
+  <% }) %>
+  </tbody></table>
+</div>
+<% widgets.forEach(w => { %><%- w %><% }) %>
+<%- include('partials/footer') %>

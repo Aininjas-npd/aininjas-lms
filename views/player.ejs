@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title><%= sco.title %> · <%= course.title %></title><link rel="icon" type="image/png" href="/icon.png"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=JetBrains+Mono:wght@400&display=swap"><link rel="stylesheet" href="/style.css">
+<script>window.SCORM_PLAYER_CONFIG = <%- JSON.stringify(config) %>;</script>
+<script src="/scorm-api.js"></script>
+</head>
+<body class="player">
+<div class="player-bar">
+  <div class="row gap"><a href="/courses/<%= course.id %>" class="btn small ghost" id="exit">✕ Exit</a> <strong><%= course.title %></strong> <span class="muted">› <%= sco.title %></span></div>
+  <div class="row gap">
+    <span class="status" id="status">Status: <%= config.initialData.lesson_status %></span>
+    <% if (prev) { %><a class="btn small ghost" href="/courses/<%= course.id %>/play/<%= prev.id %>">‹ Prev</a><% } %>
+    <% if (next) { %><a class="btn small" href="/courses/<%= course.id %>/play/<%= next.id %>">Next ›</a><% } %>
+  </div>
+</div>
+<iframe id="sco" src="<%= launchUrl %>" allow="autoplay; fullscreen" allowfullscreen></iframe>
+<script>
+  window.onScormProgress = function (r) { document.getElementById('status').textContent = 'Status: ' + r.status + ' · course ' + r.percent + '%'; };
+  window.onScormFinish = function () { /* course called LMSFinish – stay on page; learner uses Next/Exit */ };
+</script>
+</body></html>

@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"><title>What AI actually is</title><script src="shared/scorm.js"></script>
+<style>body{font-family:system-ui;max-width:720px;margin:40px auto;padding:0 20px;color:#222}button{padding:10px 18px;font-size:16px}</style></head>
+<body><h1>What AI actually is</h1>
+<p id="hello"></p>
+<p>Traditional software follows rules a human wrote. AI software learns patterns from <b>data</b>. Training builds the model; inference uses it.</p>
+<p>Page <span id="page">1</span> of 2</p>
+<button id="next" onclick="nextPage()">Next page</button>
+<script>
+  scorm.init();
+  document.getElementById('hello').textContent = 'Hi ' + scorm.get('cmi.core.student_name') + ' (entry: ' + scorm.get('cmi.core.entry') + ')';
+  var page = parseInt(scorm.get('cmi.core.lesson_location') || '1');
+  render();
+  function render(){ document.getElementById('page').textContent = page; document.getElementById('next').textContent = page === 2 ? 'Finish lesson' : 'Next page'; }
+  function nextPage(){
+    if (page === 1) { page = 2; scorm.set('cmi.core.lesson_location', '2'); scorm.set('cmi.suspend_data', JSON.stringify({page:2})); scorm.commit(); render(); }
+    else { scorm.set('cmi.core.lesson_status', 'completed'); scorm.set('cmi.core.session_time', '0000:00:45.00'); scorm.set('cmi.core.exit', ''); scorm.finish(); document.body.innerHTML += '<p id="done">✅ Lesson complete — use Next › above.</p>'; }
+  }
+</script></body></html>

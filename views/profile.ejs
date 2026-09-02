@@ -1,0 +1,12 @@
+<%- include('partials/header') %>
+<h1>My profile</h1>
+<div class="card auth" style="margin:0">
+  <p><strong><%= user.name %></strong><br><span class="muted"><%= user.email %><% if (user.organization) { %> · <%= user.organization %><% } %></span></p>
+  <form method="post" action="/profile">
+    <label>Display handle <span class="muted">(shown on the leaderboard instead of your name)</span></label>
+    <input type="text" name="display_handle" value="<%= user.display_handle || '' %>" maxlength="24">
+    <% widgets.forEach(w => { %><p><%- w %></p><% }) %>
+    <p><button class="btn">Save</button></p>
+  </form>
+</div>
+<%- include('partials/footer') %>

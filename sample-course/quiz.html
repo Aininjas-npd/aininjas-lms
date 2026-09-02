@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><title>AI apps vs regular apps</title><script src="shared/scorm.js"></script>
+<style>body{font-family:system-ui;max-width:720px;margin:40px auto;padding:0 20px;color:#222}label{display:block;margin:6px 0}button{padding:10px 18px;font-size:16px;margin-top:16px}</style></head>
+<body><h1>Quiz: AI apps vs. regular apps</h1>
+<p><b>Q1.</b> You type the same prompt into an AI chatbot twice and get two different answers. Why?</p>
+<label><input type="radio" name="q1" value="a"> The app has a bug</label>
+<label><input type="radio" name="q1" value="b"> The model predicts likely next words and doesn't follow one fixed path</label>
+<label><input type="radio" name="q1" value="c"> Your internet connection changed the result</label>
+<p><b>Q2.</b> Which of these is rule-based rather than AI-powered?</p>
+<label><input type="radio" name="q2" value="a"> Spotify Discover Weekly</label>
+<label><input type="radio" name="q2" value="b"> A calculator app</label>
+<label><input type="radio" name="q2" value="c"> Face unlock</label>
+<button id="submit" onclick="submitQuiz()">Submit answers</button>
+<p id="result"></p>
+<script>
+  scorm.init();
+  function submitQuiz(){
+    var a1 = (document.querySelector('input[name=q1]:checked')||{}).value, a2 = (document.querySelector('input[name=q2]:checked')||{}).value;
+    var score = (a1 === 'b' ? 50 : 0) + (a2 === 'b' ? 50 : 0);
+    scorm.set('cmi.interactions.0.id', 'q1'); scorm.set('cmi.interactions.0.type', 'choice'); scorm.set('cmi.interactions.0.student_response', a1||''); scorm.set('cmi.interactions.0.correct_responses.0.pattern', 'b'); scorm.set('cmi.interactions.0.result', a1==='b'?'correct':'wrong');
+    scorm.set('cmi.interactions.1.id', 'q2'); scorm.set('cmi.interactions.1.type', 'choice'); scorm.set('cmi.interactions.1.student_response', a2||''); scorm.set('cmi.interactions.1.correct_responses.0.pattern', 'b'); scorm.set('cmi.interactions.1.result', a2==='b'?'correct':'wrong');
+    scorm.set('cmi.core.score.min', '0'); scorm.set('cmi.core.score.max', '100'); scorm.set('cmi.core.score.raw', String(score));
+    var mastery = parseFloat(scorm.get('cmi.student_data.mastery_score') || '70');
+    scorm.set('cmi.core.lesson_status', score >= mastery ? 'passed' : 'failed');
+    scorm.set('cmi.core.session_time', '0000:02:10.00');
+    scorm.finish();
+    document.getElementById('result').textContent = 'Score: ' + score + ' — ' + (score >= mastery ? 'PASSED' : 'FAILED');
+    document.getElementById('submit').disabled = true;
+  }
+</script></body></html>
