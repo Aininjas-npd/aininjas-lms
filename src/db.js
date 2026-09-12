@@ -108,7 +108,9 @@ CREATE TABLE IF NOT EXISTS settings (
 `);
 
 // ---- migrations (safe to re-run) ----
-if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'sso_sub')) db.exec('ALTER TABLE users ADD COLUMN sso_sub TEXT');
+const ucols = db.prepare('PRAGMA table_info(users)').all().map(c => c.name);
+if (!ucols.includes('sso_sub')) db.exec('ALTER TABLE users ADD COLUMN sso_sub TEXT');
+if (!ucols.includes('last_login_at')) db.exec('ALTER TABLE users ADD COLUMN last_login_at TEXT');
 
 // ---- Seed the first admin from env ----
 function seedAdmin() {

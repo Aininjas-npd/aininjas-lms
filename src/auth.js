@@ -38,6 +38,7 @@ router.get('/auth/sso/callback', (req, res) => {
   try {
     const c = sso.verifyToken(req.query.token);
     const u = upsertFromSso(c);
+    db.prepare("UPDATE users SET last_login_at=datetime('now') WHERE id=?").run(u.id);
     req.session.regenerate(() => {
       req.session.userId = u.id;
       const dest = safeReturn(req.query.return) || (u.role === 'admin' ? '/admin' : '/dashboard');
@@ -121,6 +122,7 @@ router.post('/login', (req, res) => {
     return res.status(403).render('login', { title: 'Log in', error: 'This account is not active. Contact info@aininjas.com.', googleEnabled: !!process.env.GOOGLE_CLIENT_ID, ssoEnabled: !!sso, accountsUrl: ACCOUNTS_URL, showLocal: true });
   }
   req.session.userId = user.id;
+  db.prepare("UPDATE users SET last_login_at=datetime('now') WHERE id=?").run(user.id);
   const dest = req.session.returnTo || (user.role === 'admin' ? '/admin' : '/dashboard');
   delete req.session.returnTo;
   res.redirect(user.status === 'approved' ? dest : '/pending');
@@ -203,4 +205,17 @@ function makeHandle() {
   return `${w}${n}${Math.floor(100 + Math.random() * 900)}`;
 }
 
-module.exports = { router, currentUser, requireLogin, requireAdmin, flash, ssoEnabled: !!sso, accountsUrl: ACCOUNTS_URL };
+/* Pull every Academy grant from Accounts and create/update the local users (safety net if a push was missed). */
+async function syncAllFromAccounts() {
+  if (!sso) throw new Error('Single sign-on is not configured (ACCOUNTS_URL / SSO_SECRET)');
+  const grants = await sso.api('/grants');
+  let created = 0, updated = 0, disabled = 0;
+  for (const g of grants) {
+    if (g.status === 'disabled') { const u = q.userByEmail.get(String(g.email).toLowerCase()); if (u && u.status !== 'disabled') { db.prepare("UPDATE users SET status='disabled' WHERE id=?").run(u.id); disabled++; } continue; }
+    const before = q.userByEmail.get(String(g.email).toLowerCase());
+    upsertFromSso({ sub: g.id, email: g.email, name: g.name, role: g.role });
+    if (before) updated++; else created++;
+  }
+  return { total: grants.length, created, updated, disabled };
+}
+module.exports = { router, currentUser, requireLogin, requireAdmin, flash, ssoEnabled: !!sso, accountsUrl: ACCOUNTS_URL, syncAllFromAccounts };

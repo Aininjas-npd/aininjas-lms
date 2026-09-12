@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { db, q, DATA_DIR, courseSummary } = require('../db');
-const { requireAdmin, flash } = require('../auth');
+const { requireAdmin, flash, syncAllFromAccounts } = require('../auth');
 const { importPackage, deleteCourse } = require('../scorm');
 const plugins = require('../plugins');
 
@@ -124,6 +124,11 @@ router.post('/progress/reset', (req, res) => {
 });
 
 // ---- Users / access requests ----
+router.post('/users/sync-accounts', async (req, res) => {
+  try { const r = await syncAllFromAccounts(); flash(req, 'success', `Synced with AI Ninjas Accounts: ${r.total} people with Academy access — ${r.created} added, ${r.updated} updated${r.disabled ? ', ' + r.disabled + ' disabled' : ''}.`); }
+  catch (e) { flash(req, 'error', 'Sync failed: ' + e.message); }
+  res.redirect('/admin/users');
+});
 router.get('/users', (req, res) => {
   const filter = req.query.status || 'all';
   const users = db.prepare(`SELECT * FROM users ${filter === 'all' ? '' : 'WHERE status = @s'} ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC`).all({ s: filter })
