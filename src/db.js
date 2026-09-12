@@ -107,6 +107,9 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 `);
 
+// ---- migrations (safe to re-run) ----
+if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'sso_sub')) db.exec('ALTER TABLE users ADD COLUMN sso_sub TEXT');
+
 // ---- Seed the first admin from env ----
 function seedAdmin() {
   const email = (process.env.ADMIN_EMAIL || 'admin@aininjas.com').toLowerCase();

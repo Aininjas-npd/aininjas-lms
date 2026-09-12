@@ -71,3 +71,8 @@ See `.env.example`. The important ones: `BASE_URL` (public URL — drives secure
 ## Roadmap ideas
 
 Password reset emails, SCORM 2004 / xAPI support, certificates plugin, Google Classroom grade-sync plugin (see the Foundations Challenge PRD), per-school admin role, Postgres adapter for multi-instance deployments.
+
+
+## Single sign-on (AI Ninjas Accounts)
+
+Set `ACCOUNTS_URL` and `SSO_SECRET` (the Academy's secret under **Apps** in Accounts). Learners and admins given *Academy* access in Accounts sign in with one button; they're matched to existing users by email so progress is kept. Removing access in Accounts disables the user here (progress is retained). Local email/password and Google sign-in remain available at `/login?local=1`. The brand stylesheet is a pinned copy of `www.aininjas.com/brand-kit` (`public/aininjas-app.css`).

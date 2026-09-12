@@ -30,6 +30,7 @@ app.use((req, res, next) => {                    // template globals
   res.locals.mainSite = process.env.MAIN_SITE_URL || 'https://aininjas.com';
   res.locals.pluginNav = plugins.nav(req.user?.role === 'admin');
   res.locals.path = req.path;
+  res.locals.ssoEnabled = auth.ssoEnabled; res.locals.accountsUrl = auth.accountsUrl;
   next();
 });
 
