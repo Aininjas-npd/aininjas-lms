@@ -21,14 +21,16 @@ function upsertFromSso({ sub, email, name, role, scope }) {
   const em = String(email).toLowerCase();
   const r = ROLES.includes(role) ? role : 'learner';
   const slug = scope && /^[a-z0-9][a-z0-9-]{1,39}$/.test(scope.school_slug || '') ? scope.school_slug : null;   // school co-branding
-  const classes = JSON.stringify(r === 'teacher' && Array.isArray(scope && scope.classes) ? scope.classes : []);
+  const scopeClasses = Array.isArray(scope && scope.classes) ? scope.classes.filter(Boolean) : [];
+  const classes = JSON.stringify(r === 'teacher' ? scopeClasses : []);
+  const className = r === 'learner' && scopeClasses[0] ? String(scopeClasses[0]) : null;   // a student's class, as set in Accounts (import or user form)
   let u = db.prepare('SELECT * FROM users WHERE sso_sub=? OR email=?').get(String(sub), em);
   if (u) {
-    db.prepare(`UPDATE users SET email=?, sso_sub=?, name=?, role=?, classes=?, status='approved', approved_at=COALESCE(approved_at, datetime('now')), school_slug=COALESCE(?, school_slug), organization=COALESCE(organization, ?) WHERE id=?`)
-      .run(em, String(sub), name || u.name, r, classes, slug, scope && scope.school_name || null, u.id);
+    db.prepare(`UPDATE users SET email=?, sso_sub=?, name=?, role=?, classes=?, class_name=COALESCE(?, class_name), status='approved', approved_at=COALESCE(approved_at, datetime('now')), school_slug=COALESCE(?, school_slug), organization=COALESCE(organization, ?) WHERE id=?`)
+      .run(em, String(sub), name || u.name, r, classes, className, slug, scope && scope.school_name || null, u.id);
   } else {
-    const info = db.prepare(`INSERT INTO users (email, name, sso_sub, role, classes, status, approved_at, display_handle, school_slug, organization) VALUES (?, ?, ?, ?, ?, 'approved', datetime('now'), ?, ?, ?)`)
-      .run(em, name || em, String(sub), r, classes, makeHandle(), slug, scope && scope.school_name || null);
+    const info = db.prepare(`INSERT INTO users (email, name, sso_sub, role, classes, class_name, status, approved_at, display_handle, school_slug, organization) VALUES (?, ?, ?, ?, ?, ?, 'approved', datetime('now'), ?, ?, ?)`)
+      .run(em, name || em, String(sub), r, classes, className, makeHandle(), slug, scope && scope.school_name || null);
     u = q.userById.get(info.lastInsertRowid);
     q.logEvent.run(u.id, null, null, 'access_granted', JSON.stringify({ email: em, via: 'accounts', role: r }));
     plugins.emit('user:approved', { userId: u.id });
@@ -242,4 +244,4 @@ async function syncAllFromAccounts() {
   }
   return { total: grants.length, created, updated, disabled };
 }
-module.exports = { router, currentUser, requireLogin, requireAdmin, requireStaff, homeFor, STAFF, flash, ssoEnabled: !!sso, accountsUrl: ACCOUNTS_URL, syncAllFromAccounts };
+module.exports = { router, currentUser, requireLogin, requireAdmin, requireStaff, homeFor, STAFF, flash, upsertFromSso, ssoEnabled: !!sso, accountsUrl: ACCOUNTS_URL, syncAllFromAccounts };
