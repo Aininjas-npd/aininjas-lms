@@ -35,13 +35,18 @@ const quizEnabled = () => !!(QUIZ_URL && LAUNCH_SECRET);
 const TYPE_LABEL = { sco: 'Learn', quiz: 'Check', colab: 'Practice', note: 'Read' };
 const TYPE_ICON = { sco: '▶', quiz: '✓', colab: '{ }', note: '¶' };
 
-function shape(row) { let config = {}; try { config = JSON.parse(row.config || '{}'); } catch {} return { ...row, config, kind: TYPE_LABEL[row.type] || row.type, icon: TYPE_ICON[row.type] || '•', custom: true }; }
+function shape(row) {
+  let config = {}; try { config = JSON.parse(row.config || '{}'); } catch {}
+  const out = { ...row, config, kind: TYPE_LABEL[row.type] || row.type, icon: TYPE_ICON[row.type] || '•', custom: true };
+  if (row.type === 'sco') { const sco = q.scoById.get(config.sco_id); out.pkg = sco ? (sco.package_title || '') : ''; out.missing = !sco; }
+  return out;
+}
 
 /** Custom steps for a course, or an automatic path made of its SCORM lessons. */
 function stepsFor(courseId) {
   const rows = db.prepare('SELECT * FROM path_steps WHERE course_id=? ORDER BY sort_order, id').all(courseId).map(shape);
   if (rows.length) return rows;
-  return q.scosForCourse.all(courseId).map((s, i) => ({ id: 'sco-' + s.id, course_id: courseId, sort_order: i, type: 'sco', title: s.title, config: { sco_id: s.id }, kind: 'Learn', icon: '▶', custom: false }));
+  return q.scosForCourse.all(courseId).map((s, i) => ({ id: 'sco-' + s.id, course_id: courseId, sort_order: i, type: 'sco', title: s.title, config: { sco_id: s.id }, kind: 'Learn', icon: '▶', custom: false, pkg: s.package_title || '' }));
 }
 const hasCustomPath = courseId => db.prepare('SELECT COUNT(*) n FROM path_steps WHERE course_id=?').get(courseId).n > 0;
 

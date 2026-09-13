@@ -19,7 +19,7 @@
         <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/rename" class="row gap"><input type="text" name="title" value="<%= s.title %>" style="max-width:340px"><button class="link small" type="submit">rename</button></form>
         <% } else { %><h3><%= s.title %></h3><% } %>
         <p class="small muted meta">
-          <% if (s.type === 'sco') { %>Lesson from the SCORM package<% } %>
+          <% if (s.type === 'sco') { %><%= s.missing ? 'Lesson no longer exists — remove this step' : 'Lesson' + (s.pkg ? ' · ' + s.pkg : '') %><% } %>
           <% if (s.type === 'quiz') { %>Quiz Studio #<%= s.config.quiz_id %> <%= s.config.quiz_title ? '· ' + s.config.quiz_title : '' %><% } %>
           <% if (s.type === 'colab') { %><a href="<%= s.config.url %>" target="_blank" rel="noopener"><%= s.config.url %></a><% } %>
         </p>
@@ -47,7 +47,7 @@
         <option value="note">Read — a short note / instructions</option>
       </select></div>
     <div class="field"><label>Title <span class="muted">(optional — shown to students)</span></label><input type="text" name="title" placeholder="e.g. Level 1 · Loops in Python"></div>
-    <div data-for="sco" class="field"><label>Lesson</label><select name="sco_id"><% scos.forEach(s => { %><option value="<%= s.id %>"><%= s.title %></option><% }) %></select></div>
+    <div data-for="sco" class="field"><label>Lesson</label><% if (!scos.length) { %><p class="muted small">No lessons yet — upload a SCORM package in the box on the right; its lessons are added to the path automatically.</p><% } else { %><select name="sco_id"><% scos.forEach(s => { %><option value="<%= s.id %>"><%= s.title %><%= s.package_title ? ' (' + s.package_title + ')' : '' %></option><% }) %></select><div class="hint">Use this to place a lesson a second time or re-add one you removed.</div><% } %></div>
     <div data-for="colab" hidden>
       <div class="field"><label>Colab notebook link</label><input type="url" name="url" placeholder="https://colab.research.google.com/drive/…"><div class="hint">Share the notebook as "Anyone with the link can view"; students press <i>File → Save a copy in Drive</i>.</div></div>
       <div class="field"><label>Instructions for students</label><textarea name="instructions" rows="3" placeholder="Complete exercises 1–4, then come back and mark this done."></textarea></div>
@@ -64,6 +64,17 @@
     <div data-for="note" hidden class="field"><label>Note</label><textarea name="instructions" rows="4" placeholder="Welcome! This week…"></textarea></div>
     <button class="btn" type="submit">Add step</button>
   </form>
+  <div class="card">
+    <h3>SCORM packages in this course</h3>
+    <% if (!packages.length) { %><p class="muted small">None yet.</p><% } %>
+    <% packages.forEach(pk => { %><div class="row between" style="margin-bottom:6px"><span><b><%= pk.title %></b> <span class="muted small">· <%= pk.count %> lesson<%= pk.count === 1 ? '' : 's' %></span></span>
+      <form method="post" action="/admin/courses/<%= course.id %>/packages/remove" class="inline" onsubmit="return confirm('Remove this package, its lessons and their steps? Learner progress on those lessons is lost.')"><input type="hidden" name="folder" value="<%= pk.folder %>"><button class="link small" type="submit">remove</button></form></div><% }) %>
+    <form method="post" action="/admin/courses/<%= course.id %>/packages" enctype="multipart/form-data" style="margin-top:12px">
+      <label>Add a SCORM 1.2 package (.zip)</label><input type="file" name="package" accept=".zip" required>
+      <label>Package name <span class="muted">(optional — defaults to the manifest title)</span></label><input type="text" name="title" placeholder="e.g. Module 2 · Variables">
+      <p><button class="btn small" type="submit">Upload & add lessons to the path</button></p>
+    </form>
+  </div>
   <div class="card"><h3>Tips</h3>
     <p class="small serif">A typical week: <b>Learn</b> lesson → <b>Practice</b> Colab → <b>Check</b> quiz. Put the quiz after the Colab step when the quiz is how you grade the coding exercise.</p>
     <p class="small serif">Students see the class leaderboard in Quiz Studio as before; you see every student's score per step on the course page and in Quiz Studio's dashboards.</p>

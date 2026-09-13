@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { db, q, DATA_DIR, courseSummary } = require('../db');
 const { requireAdmin, flash, syncAllFromAccounts } = require('../auth');
-const { importPackage, deleteCourse } = require('../scorm');
+const { importPackage, createCourse, addPackageToCourse, removePackage, packagesFor, deleteCourse } = require('../scorm');
 const plugins = require('../plugins');
 const pathLib = require('../path');
 
@@ -39,17 +39,44 @@ router.get('/courses', (req, res) => {
   res.render('admin/courses', { title: 'Courses', courses });
 });
 
+// Create a course — with or without a SCORM package. More packages/quizzes/notebooks are added on its learning-path page.
 router.post('/courses/upload', upload.single('package'), (req, res) => {
-  if (!req.file) { flash(req, 'error', 'Choose a .zip SCORM package.'); return res.redirect('/admin/courses'); }
   try {
-    const course = importPackage(req.file.path, { title: req.body.title, description: req.body.description, openEnrollment: req.body.open_enrollment === 'on' });
-    q.logEvent.run(req.user.id, course.id, null, 'course_uploaded', JSON.stringify({ title: course.title }));
-    flash(req, 'success', `Imported "${course.title}" (${db.prepare('SELECT COUNT(*) n FROM scos WHERE course_id=?').get(course.id).n} SCO(s)).`);
+    let course;
+    if (req.file) {
+      course = importPackage(req.file.path, { title: req.body.title, description: req.body.description, openEnrollment: req.body.open_enrollment === 'on' });
+      flash(req, 'success', `Created "${course.title}" with ${db.prepare('SELECT COUNT(*) n FROM scos WHERE course_id=?').get(course.id).n} lesson(s). Add quizzes, notebooks or more packages on its learning path.`);
+    } else {
+      course = createCourse({ title: req.body.title, description: req.body.description, openEnrollment: req.body.open_enrollment === 'on' });
+      flash(req, 'success', `Created "${course.title}". Now add its steps.`);
+    }
+    q.logEvent.run(req.user.id, course.id, null, 'course_created', JSON.stringify({ title: course.title, withPackage: !!req.file }));
+    return res.redirect(`/admin/courses/${course.id}/path`);
   } catch (e) {
-    console.error('[upload]', e);
-    flash(req, 'error', `Import failed: ${e.message}`);
-  } finally { fs.rmSync(req.file.path, { force: true }); }
+    console.error('[create course]', e);
+    flash(req, 'error', `Could not create the course: ${e.message}`);
+  } finally { if (req.file) fs.rmSync(req.file.path, { force: true }); }
   res.redirect('/admin/courses');
+});
+// Add a SCORM package to an existing course → its lessons become Learn steps at the end of the path
+router.post('/courses/:id/packages', upload.single('package'), (req, res) => {
+  const course = q.courseById.get(req.params.id);
+  if (!course) return res.status(404).render('error', { title: 'Not found', message: 'Course not found.' });
+  if (!req.file) { flash(req, 'error', 'Choose a .zip SCORM 1.2 package.'); return res.redirect(`/admin/courses/${course.id}/path`); }
+  try {
+    const custom = pathLib.hasCustomPath(course.id);
+    const scos = addPackageToCourse(course.id, req.file.path, { title: req.body.title });
+    if (custom) scos.forEach(s => pathLib.addStep(course.id, { type: 'sco', title: s.title, config: { sco_id: s.id } }));
+    q.logEvent.run(req.user.id, course.id, null, 'package_added', JSON.stringify({ title: scos[0] && scos[0].package_title, lessons: scos.length }));
+    flash(req, 'success', `Added "${scos[0].package_title}" — ${scos.length} lesson(s) appended to the path.`);
+  } catch (e) { console.error('[add package]', e); flash(req, 'error', `Import failed: ${e.message}`); }
+  finally { fs.rmSync(req.file.path, { force: true }); }
+  res.redirect(`/admin/courses/${course.id}/path`);
+});
+router.post('/courses/:id/packages/remove', (req, res) => {
+  removePackage(+req.params.id, String(req.body.folder || ''));
+  flash(req, 'success', 'Package removed.');
+  res.redirect(`/admin/courses/${req.params.id}/path`);
 });
 
 router.post('/courses/:id/toggle', (req, res) => {
@@ -87,7 +114,7 @@ router.get('/courses/:id/path', async (req, res) => {
   let quizzes = [], quizError = null;
   if (pathLib.quizEnabled()) { try { quizzes = await pathLib.listQuizzes(); } catch (e) { quizError = e.message; } }
   res.render('admin/path', { title: 'Learning path · ' + course.title, course, steps: pathLib.stepsFor(course.id), custom: pathLib.hasCustomPath(course.id),
-    scos: q.scosForCourse.all(course.id), quizzes, quizError, quizEnabled: pathLib.quizEnabled(), quizUrl: pathLib.QUIZ_URL });
+    scos: q.scosForCourse.all(course.id), packages: packagesFor(course.id), quizzes, quizError, quizEnabled: pathLib.quizEnabled(), quizUrl: pathLib.QUIZ_URL });
 });
 router.post('/courses/:id/path/steps', (req, res) => {
   const course = q.courseById.get(req.params.id);

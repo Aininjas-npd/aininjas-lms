@@ -16,8 +16,20 @@ function slugify(s) {
   return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60) || 'course';
 }
 
-/** Extract zip, parse manifest, insert course + SCO rows. Returns course row. */
-function importPackage(zipPath, { title, description, openEnrollment } = {}) {
+/** Create an empty course (no SCORM needed) — steps are added on the learning-path page. */
+function createCourse({ title, description, openEnrollment } = {}) {
+  const courseTitle = String(title || '').trim();
+  if (!courseTitle) throw new Error('Give the course a title.');
+  let slug = slugify(courseTitle), n = 1;
+  while (q.courseBySlug.get(slug)) slug = `${slugify(courseTitle)}-${++n}`;
+  fs.mkdirSync(path.join(DATA_DIR, 'courses', slug), { recursive: true });
+  const info = db.prepare(`INSERT INTO courses (slug, title, description, version, manifest_json, open_enrollment) VALUES (?, ?, ?, '', '[]', ?)`)
+    .run(slug, courseTitle, description || null, openEnrollment ? 1 : 0);
+  return q.courseById.get(info.lastInsertRowid);
+}
+
+/** Parse a SCORM 1.2 zip. Returns { entries, prefix, manifest, tree, scos, title, description, schemaversion }. */
+function parsePackage(zipPath, { title, description } = {}) {
   const zip = new AdmZip(zipPath);
   const entries = zip.getEntries();
   const manifestEntry = entries.find(e => /(^|\/)imsmanifest\.xml$/i.test(e.entryName));
@@ -67,12 +79,9 @@ function importPackage(zipPath, { title, description, openEnrollment } = {}) {
     }
   })(org.item, 0, tree);
   if (!scos.length) throw new Error('No launchable SCOs (items with identifierref + resource href) found in manifest.');
-
-  // ---- write files ----
-  let slug = slugify(courseTitle);
-  let n = 1;
-  while (q.courseBySlug.get(slug)) slug = `${slugify(courseTitle)}-${++n}`;
-  const dest = path.join(DATA_DIR, 'courses', slug);
+  return { entries, prefix, manifest, tree, scos, title: courseTitle, description: description || textOf(manifest.metadata?.description) || null, schemaversion: String(schemaversion) };
+}
+function writeFiles(entries, prefix, dest) {
   fs.mkdirSync(dest, { recursive: true });
   for (const e of entries) {
     if (e.isDirectory || !e.entryName.startsWith(prefix)) continue;
@@ -82,20 +91,52 @@ function importPackage(zipPath, { title, description, openEnrollment } = {}) {
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, e.getData());
   }
+}
+const insertSco = db.prepare(`INSERT INTO scos (course_id, identifier, title, launch_href, sort_order, mastery_score, max_time_allowed, data_from_lms, package, package_title)
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
 
-  // ---- DB rows ----
-  const insertCourse = db.prepare(`INSERT INTO courses (slug, title, description, version, manifest_json, open_enrollment)
-                                   VALUES (?, ?, ?, ?, ?, ?)`);
-  const insertSco = db.prepare(`INSERT INTO scos (course_id, identifier, title, launch_href, sort_order, mastery_score, max_time_allowed, data_from_lms)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
-  const tx = db.transaction(() => {
-    const info = insertCourse.run(slug, courseTitle, description || textOf(manifest.metadata?.description) || null,
-                                  String(schemaversion), JSON.stringify(tree), openEnrollment ? 1 : 0);
-    scos.forEach((s, i) => insertSco.run(info.lastInsertRowid, s.identifier, s.title, s.launch, i, s.mastery, s.maxTime, s.dataFromLms));
+/** Import a zip as a NEW course (the original behaviour). Returns the course row. */
+function importPackage(zipPath, { title, description, openEnrollment } = {}) {
+  const pk = parsePackage(zipPath, { title, description });
+  let slug = slugify(pk.title), n = 1;
+  while (q.courseBySlug.get(slug)) slug = `${slugify(pk.title)}-${++n}`;
+  writeFiles(pk.entries, pk.prefix, path.join(DATA_DIR, 'courses', slug));
+  const courseId = db.transaction(() => {
+    const info = db.prepare(`INSERT INTO courses (slug, title, description, version, manifest_json, open_enrollment) VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(slug, pk.title, pk.description, pk.schemaversion, JSON.stringify(pk.tree), openEnrollment ? 1 : 0);
+    pk.scos.forEach((s, i) => insertSco.run(info.lastInsertRowid, s.identifier, s.title, s.launch, i, s.mastery, s.maxTime, s.dataFromLms, '', pk.title));
     return info.lastInsertRowid;
-  });
-  const courseId = tx();
+  })();
   return q.courseById.get(courseId);
+}
+
+/** Add a zip's lessons to an EXISTING course (any number of packages per course). Returns the new SCO rows. */
+function addPackageToCourse(courseId, zipPath, { title } = {}) {
+  const course = q.courseById.get(courseId);
+  if (!course) throw new Error('Course not found');
+  const pk = parsePackage(zipPath, { title });
+  const folder = 'pkg-' + Date.now().toString(36);
+  writeFiles(pk.entries, pk.prefix, path.join(DATA_DIR, 'courses', course.slug, folder));
+  const start = db.prepare('SELECT COALESCE(MAX(sort_order), -1) m FROM scos WHERE course_id=?').get(course.id).m + 1;
+  const ids = db.transaction(() => pk.scos.map((s, i) => {
+    const ident = `${folder}:${s.identifier}`;   // identifiers are only unique within a package
+    return insertSco.run(course.id, ident, s.title, folder + '/' + s.launch, start + i, s.mastery, s.maxTime, s.dataFromLms, folder, pk.title).lastInsertRowid;
+  }))();
+  if (!course.version) db.prepare('UPDATE courses SET version=? WHERE id=?').run(pk.schemaversion, course.id);
+  return ids.map(id => q.scoById.get(id));
+}
+/** Remove one package (its files, SCOs and any path steps pointing at them). */
+function removePackage(courseId, folder) {
+  const course = q.courseById.get(courseId); if (!course) return;
+  const scos = db.prepare('SELECT id FROM scos WHERE course_id=? AND package=?').all(courseId, folder);
+  db.transaction(() => {
+    scos.forEach(s => { db.prepare(`DELETE FROM path_steps WHERE course_id=? AND type='sco' AND json_extract(config, '$.sco_id')=?`).run(courseId, s.id); db.prepare('DELETE FROM scos WHERE id=?').run(s.id); });
+  })();
+  if (folder) fs.rmSync(path.join(DATA_DIR, 'courses', course.slug, folder), { recursive: true, force: true });
+}
+/** Packages in a course: [{ folder, title, count }] */
+function packagesFor(courseId) {
+  return db.prepare(`SELECT COALESCE(package, '') AS folder, COALESCE(package_title, 'Lessons') AS title, COUNT(*) AS count FROM scos WHERE course_id=? GROUP BY package, package_title ORDER BY MIN(sort_order)`).all(courseId);
 }
 
 function deleteCourse(courseId) {
@@ -113,4 +154,4 @@ function textOf(v) {
   return '';
 }
 
-module.exports = { importPackage, deleteCourse };
+module.exports = { importPackage, createCourse, addPackageToCourse, removePackage, packagesFor, deleteCourse };

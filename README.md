@@ -78,6 +78,10 @@ Password reset emails, SCORM 2004 / xAPI support, certificates plugin, Google Cl
 Set `ACCOUNTS_URL` and `SSO_SECRET` (the Academy's secret under **Apps** in Accounts). Learners and admins given *Academy* access in Accounts sign in with one button; they're matched to existing users by email so progress is kept. Removing access in Accounts disables the user here (progress is retained). Local email/password and Google sign-in remain available at `/login?local=1`. The brand stylesheet is a pinned copy of `www.aininjas.com/brand-kit` (`public/aininjas-app.css`).
 
 
+## Courses hold any mix of content
+
+Admin → Courses → **New course** creates a course with just a title (a SCORM zip is optional). On its learning-path page you can upload any number of SCORM 1.2 packages (each becomes a set of Learn steps, stored in its own sub-folder), add Quiz Studio quizzes and Colab notebooks, and reorder everything. Packages can be removed individually.
+
 ## Learning paths (Learn → Practice → Check)
 
 Admin → course → **Build learning path**. A path is an ordered list of steps: **Learn** (a SCORM lesson), **Practice** (a Google Colab notebook link with instructions; the student opens it, then marks it done and can paste their notebook's share link), **Check** (a Quiz Studio quiz), or **Read** (a note). Students see one page per course with a single *Continue* button that always goes to the first unfinished step; the dashboard shows path progress. A course with no custom steps uses its lessons as the path, so nothing changes until you add a step.
