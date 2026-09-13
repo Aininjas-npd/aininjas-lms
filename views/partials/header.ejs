@@ -8,14 +8,14 @@
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
-<link rel="stylesheet" href="/aininjas-app.css">
-<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/aininjas-app.css?v=20260913b">
+<link rel="stylesheet" href="/style.css?v=20260913b">
 <% if (locals.brand) { %><style id="school-accent"><%- brandCss %></style><% } %>
 </head>
 <body>
 <header class="site<%= locals.brand ? ' cobranded' : '' %>"><div class="wrap"><div class="hrow">
   <a href="/" class="logolink" aria-label="AI Ninjas Academy"><img class="logo" src="/logo.png" alt="AI Ninjas" width="279" height="53"><span class="apptag">Academy</span></a>
-  <% if (locals.brand) { %><span class="cobrand" title="<%= brand.name %>"><% if (brand.logo) { %><span class="slogo"><img src="<%= brand.logo %>" alt=""></span><% } %><span class="sname"><%= brand.name %><small><%= brand.tagline || 'School portal' %></small></span></span><% } %>
+  <% if (locals.brand) { %><span class="cobrand" title="<%= brand.name %>"><% if (brand.logo) { %><span class="slogo"><img src="<%= brand.logo %>" alt="" style="height:26px;width:auto;max-width:120px"></span><% } %><span class="sname"><%= brand.name %><small><%= brand.tagline || 'School portal' %></small></span></span><% } %>
   <button class="navtoggle" type="button" aria-controls="sitenav" aria-expanded="false" aria-label="Open menu" onclick="var n=document.getElementById('sitenav');n.classList.toggle('open');this.setAttribute('aria-expanded',n.classList.contains('open'))"><span></span><span></span><span></span></button>
   <nav class="sub" id="sitenav" aria-label="Primary">
     <% if (user && user.status === 'approved') { %>

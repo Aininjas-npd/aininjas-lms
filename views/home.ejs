@@ -7,7 +7,7 @@
 </section>
 <% if (locals.brand) { %>
 <div class="schoolhero">
-  <% if (brand.logo) { %><img src="<%= brand.logo %>" alt=""><% } %>
+  <% if (brand.logo) { %><img src="<%= brand.logo %>" alt="" style="height:56px;width:auto;max-width:180px"><% } %>
   <div><p class="t"><%= brand.name %></p><p class="s"><%= brand.tagline || 'Welcome to your school\'s AI Ninjas Academy' %></p></div>
   <span class="pw">Powered by <img src="/icon.png" alt="AI Ninjas"></span>
 </div>

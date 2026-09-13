@@ -1,6 +1,6 @@
 <%- include('partials/header') %>
 <div class="auth">
-  <% if (locals.brand) { %><div class="schoolhero"><% if (brand.logo) { %><img src="<%= brand.logo %>" alt=""><% } %><div><p class="t"><%= brand.name %></p><p class="s"><%= brand.tagline || 'Student and teacher sign-in' %></p></div><span class="pw">Powered by <img src="/icon.png" alt="AI Ninjas"></span></div><% } %>
+  <% if (locals.brand) { %><div class="schoolhero"><% if (brand.logo) { %><img src="<%= brand.logo %>" alt="" style="height:56px;width:auto;max-width:180px"><% } %><div><p class="t"><%= brand.name %></p><p class="s"><%= brand.tagline || 'Student and teacher sign-in' %></p></div><span class="pw">Powered by <img src="/icon.png" alt="AI Ninjas"></span></div><% } %>
   <div class="auth-head"><span class="apptag">Sign in to the Academy</span></div>
   <% if (ssoEnabled) { %>
   <div class="card">
