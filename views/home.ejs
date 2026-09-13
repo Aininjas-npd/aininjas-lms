@@ -2,9 +2,16 @@
 <section class="hero">
   <span class="slash"></span>
   <h1>Your training ground.</h1>
-  <p><% if (ssoEnabled) { %>The AI Ninjas learning platform. Sign in with your AI Ninjas account and work through the modules at your own pace — every lesson tracked, every belt earned.<% } else { %>The AI Ninjas learning platform. Request access, get approved by your school or by us, and work through the modules at your own pace — every lesson tracked, every belt earned.<% } %></p>
+  <p><% if (locals.brand) { %><b><%= brand.name %></b> learns with AI Ninjas here. <% } %><% if (ssoEnabled) { %>The AI Ninjas learning platform. Sign in with your AI Ninjas account and work through the modules at your own pace — every lesson tracked, every belt earned.<% } else { %>The AI Ninjas learning platform. Request access, get approved by your school or by us, and work through the modules at your own pace — every lesson tracked, every belt earned.<% } %></p>
   <% if (ssoEnabled) { %><a class="btn btn-p" href="/auth/sso">Sign in with your AI Ninjas account</a> &nbsp; <a class="btn btn-o" href="<%= mainSite %>/contact.html">Ask for access</a><% } else { %><a class="btn btn-p" href="/request-access">Request access</a> &nbsp; <a class="btn btn-o" href="/login">I already have an account</a><% } %>
 </section>
+<% if (locals.brand) { %>
+<div class="schoolhero">
+  <% if (brand.logo) { %><img src="<%= brand.logo %>" alt=""><% } %>
+  <div><p class="t"><%= brand.name %></p><p class="s"><%= brand.tagline || 'Welcome to your school\'s AI Ninjas Academy' %></p></div>
+  <span class="pw">Powered by <img src="/icon.png" alt="AI Ninjas"></span>
+</div>
+<% } %>
 <h2>Courses</h2>
 <div class="grid">
 <% courses.forEach(c => { %>

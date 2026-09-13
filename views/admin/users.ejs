@@ -3,10 +3,17 @@
   <form method="post" action="/admin/settings" class="row gap"><label class="check" style="margin:0"><input type="checkbox" name="auto_approve" <%= autoApprove ? 'checked' : '' %> onchange="this.form.submit()"> Auto-approve new sign-ups</label></form></div>
 <% if (ssoEnabled) { %><div class="flash" style="border-color:var(--steel);background:var(--steel-soft);color:var(--steel)"><div class="row between"><span>Logins are managed in <b>AI Ninjas Accounts</b>. Anyone given Academy access there appears here at once — you can enroll them before they've signed in. If someone is missing, pull the full list.</span><span class="actions"><form method="post" action="/admin/users/sync-accounts" class="inline"><button class="btn small btn-s" type="submit">Sync from Accounts</button></form><a class="btn small ghost" href="<%= accountsUrl %>/admin/users" target="_blank" rel="noopener">Open Accounts →</a></span></div></div><% } %>
 <p class="actions"><% ['all','pending','approved','rejected','disabled'].forEach(f => { %><a class="btn small <%= filter === f ? '' : 'ghost' %>" href="/admin/users?status=<%= f %>"><%= f %></a><% }) %></p>
-<table class="table"><thead><tr><th>User</th><th>Organization / note</th><th>Status</th><th>Courses</th><th>Actions</th></tr></thead><tbody>
+<table class="table"><thead><tr><th>User</th><th>School</th><th>Status</th><th>Courses</th><th>Actions</th></tr></thead><tbody>
 <% users.forEach(u => { %>
   <tr><td><strong><%= u.name %></strong> <% if (u.role === 'admin') { %><span class="badge">admin</span><% } %><br><span class="muted small"><%= u.email %><%= u.google_id ? ' · Google' : '' %><%= u.sso_sub ? ' · AI Ninjas account' : '' %> · joined <%= u.created_at.slice(0,10) %></span><% if (u.sso_sub && !u.last_login_at) { %><br><span class="badge pending">not signed in yet</span><% } else if (u.last_login_at) { %><br><span class="muted small">last sign-in <%= u.last_login_at.slice(0,10) %></span><% } %></td>
-    <td class="small"><%= u.organization || '' %><% if (u.request_note) { %><br><span class="muted">“<%= u.request_note %>”</span><% } %></td>
+    <td class="small">
+      <form method="post" action="/admin/users/<%= u.id %>/school" class="row gap" style="margin:0">
+        <select name="school_slug" style="width:auto;max-width:200px" onchange="this.form.submit()" title="School (drives the logo and accent this person sees, and which school's quiz link they get)">
+          <option value="">— no school —</option>
+          <% schools.forEach(s => { %><option value="<%= s.slug %>" <%= u.school_slug === s.slug ? 'selected' : '' %>><%= s.name %></option><% }) %>
+          <% if (u.school_slug && !schools.some(s => s.slug === u.school_slug)) { %><option value="<%= u.school_slug %>" selected><%= u.school_slug %></option><% } %>
+        </select></form>
+      <% if (u.organization) { %><span class="muted"><%= u.organization %></span><% } %><% if (u.request_note) { %><br><span class="muted">“<%= u.request_note %>”</span><% } %></td>
     <td><span class="badge <%= u.status %>"><%= u.status %></span></td>
     <td class="small"><% u.enrollments.forEach(e => { %><div><%= e.title %> <span class="badge <%= e.status %>"><%= e.status %></span>
         <% if (e.status === 'requested') { %><form class="inline" method="post" action="/admin/enrollments/<%= e.id %>/approve"><button class="btn small ok">Grant</button></form><% } %>

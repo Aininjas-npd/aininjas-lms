@@ -8,6 +8,7 @@ const { requireAdmin, flash, syncAllFromAccounts } = require('../auth');
 const { importPackage, createCourse, addPackageToCourse, removePackage, packagesFor, deleteCourse } = require('../scorm');
 const plugins = require('../plugins');
 const pathLib = require('../path');
+const brand = require('../brand');
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -191,11 +192,20 @@ router.post('/users/sync-accounts', async (req, res) => {
   catch (e) { flash(req, 'error', 'Sync failed: ' + e.message); }
   res.redirect('/admin/users');
 });
-router.get('/users', (req, res) => {
+router.get('/users', async (req, res) => {
   const filter = req.query.status || 'all';
   const users = db.prepare(`SELECT * FROM users ${filter === 'all' ? '' : 'WHERE status = @s'} ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC`).all({ s: filter })
     .map(u => ({ ...u, enrollments: db.prepare(`SELECT e.*, c.title FROM enrollments e JOIN courses c ON c.id=e.course_id WHERE e.user_id=?`).all(u.id) }));
-  res.render('admin/users', { title: 'Users & access requests', users, filter, courses: q.courses.all(), autoApprove: q.getSetting.get('auto_approve')?.value === '1' });
+  res.render('admin/users', { title: 'Users & access requests', users, filter, courses: q.courses.all(), autoApprove: q.getSetting.get('auto_approve')?.value === '1', schools: await brand.listSchools() });
+});
+/* school co-branding: which school a learner belongs to (drives their logo/accent and the quiz launch) */
+router.post('/users/:id/school', (req, res) => {
+  const u = q.userById.get(req.params.id);
+  if (!u) return res.sendStatus(404);
+  const slug = String(req.body.school_slug || '').toLowerCase();
+  db.prepare('UPDATE users SET school_slug=? WHERE id=?').run(brand.SLUG_RE.test(slug) ? slug : null, u.id);
+  flash(req, 'success', slug ? `${u.name} is now with ${slug}.` : `${u.name} has no school set.`);
+  res.redirect('/admin/users');
 });
 router.post('/users/:id/:action', (req, res) => {
   const u = q.userById.get(req.params.id);

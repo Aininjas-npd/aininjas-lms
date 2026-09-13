@@ -87,3 +87,13 @@ Admin → Courses → **New course** creates a course with just a title (a SCORM
 Admin → course → **Build learning path**. A path is an ordered list of steps: **Learn** (a SCORM lesson), **Practice** (a Google Colab notebook link with instructions; the student opens it, then marks it done and can paste their notebook's share link), **Check** (a Quiz Studio quiz), or **Read** (a note). Students see one page per course with a single *Continue* button that always goes to the first unfinished step; the dashboard shows path progress. A course with no custom steps uses its lessons as the path, so nothing changes until you add a step.
 
 Quiz steps launch Quiz Studio with a signed token carrying the student's identity (the name gate is skipped, the attempt is tagged to the student) and Quiz Studio posts the score back to `/api/quiz-results`, which marks the step complete and keeps the best score. Requires `QUIZ_STUDIO_URL` and `QUIZ_LAUNCH_SECRET` here and the same `QUIZ_LAUNCH_SECRET` on Quiz Studio. The admin course page shows a class grid: every learner × every step, with quiz scores and notebook links.
+
+## School co-branding and entry links
+
+Schools are managed in Quiz Studio (name, logo, one accent colour from a curated palette, and a *link name* such as `darularqam`). The Academy reads a school's branding from Quiz Studio (`GET /api/brand/<slug>`, cached for 5 minutes) — nothing to configure beyond `QUIZ_STUDIO_URL` and `QUIZ_LAUNCH_SECRET`, which the learning paths already need.
+
+- **Entry link per school:** `academy.aininjas.com/s/<slug>` remembers the school (cookie) and shows its logo, name and accent on the home page, the sign-in page and the header. A student who signs up or signs in through that link is tagged with the school automatically.
+- **Signed-in people:** `users.school_slug` decides whose branding they see. It is set from the AI Ninjas Accounts sign-in token (Accounts derives it from any school-scoped access the person has, e.g. a teacher's Quiz Studio access), from the entry link, or by an admin on **Admin → Users** (School dropdown, list comes from Quiz Studio). AI Ninjas administrators always see the plain Academy.
+- **Quiz steps:** the launch token now carries `school_slug`, so Quiz Studio picks the right school's link by slug (falls back to the school name).
+- AI Ninjas stays visible everywhere ("Powered by" mark, the AI Ninjas wordmark in the header): this is co-branding, not white-labelling.
+

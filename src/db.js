@@ -112,6 +112,7 @@ const ucols = db.prepare('PRAGMA table_info(users)').all().map(c => c.name);
 if (!ucols.includes('sso_sub')) db.exec('ALTER TABLE users ADD COLUMN sso_sub TEXT');
 if (!ucols.includes('last_login_at')) db.exec('ALTER TABLE users ADD COLUMN last_login_at TEXT');
 if (!ucols.includes('class_name')) db.exec('ALTER TABLE users ADD COLUMN class_name TEXT');
+if (!ucols.includes('school_slug')) db.exec('ALTER TABLE users ADD COLUMN school_slug TEXT');   // school co-branding (slug from Quiz Studio)
 const scols = db.prepare('PRAGMA table_info(scos)').all().map(c => c.name);
 if (!scols.includes('package')) db.exec("ALTER TABLE scos ADD COLUMN package TEXT");           // sub-folder of the package this SCO came from ('' = course root)
 if (!scols.includes('package_title')) db.exec("ALTER TABLE scos ADD COLUMN package_title TEXT");

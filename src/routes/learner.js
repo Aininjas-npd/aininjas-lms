@@ -5,13 +5,25 @@ const { db, q, DATA_DIR, courseSummary } = require('../db');
 const { requireLogin, flash } = require('../auth');
 const plugins = require('../plugins');
 const pathLib = require('../path');
+const brand = require('../brand');
 
 const router = express.Router();
 const baseUrl = req => (process.env.BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
 
 router.get('/', (req, res) => {
   if (req.user && req.user.status === 'approved') return res.redirect(req.user.role === 'admin' ? '/admin' : '/dashboard');
-  res.render('home', { title: 'AI Ninjas Academy', courses: q.courses.all().filter(c => c.is_published) });
+  res.render('home', { title: res.locals.brand ? res.locals.brand.name : 'AI Ninjas Academy', courses: q.courses.all().filter(c => c.is_published) });
+});
+
+/* Per-school entry link: academy.aininjas.com/s/darularqam — remembers the school (cookie) so the sign-in page,
+   the header and the student's dashboard carry the school's logo and accent. Unknown slugs fall back to the plain home page. */
+router.get('/s/:slug', async (req, res) => {
+  const slug = String(req.params.slug || '').toLowerCase();
+  const b = brand.SLUG_RE.test(slug) ? await brand.fetchBrand(slug) : null;
+  if (!b) return res.status(404).render('error', { title: 'Unknown school link', message: `There is no school at /s/${slug}. Check the link your school gave you, or go to the Academy home page.` });
+  brand.setCookie(res, b.slug);
+  if (req.user && req.user.role !== 'admin' && !req.user.school_slug) db.prepare('UPDATE users SET school_slug=? WHERE id=?').run(b.slug, req.user.id);
+  res.redirect(req.user && req.user.status === 'approved' ? '/dashboard' : '/');
 });
 
 router.get('/dashboard', requireLogin, (req, res) => {

@@ -184,3 +184,30 @@ footer.site{background:transparent;color:var(--muted);text-align:center;padding:
 footer.site a{color:var(--muted)}footer.site a:hover{color:var(--ink)}
 footer.site .apps{margin-top:6px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase}
 footer.site .apps a{margin:0 6px}
+
+/* ---------- school co-branding (added 2026-09-13): logo chip in the header + one accent ----------
+   A page with a school context sets --school-accent (see lib/brand.js accentCss) and renders
+   <span class="cobrand"><img …><span class="sname">School</span></span> inside .hrow. AI Ninjas stays. */
+header.site.cobranded,#topbar.cobranded{border-bottom:3px solid var(--school-accent,var(--ember))}
+.hrow .cobrand{display:inline-flex;align-items:center;gap:10px;padding-left:16px;border-left:1px solid #2A2120;color:#fff;text-decoration:none;min-width:0}
+.hrow .cobrand .slogo{display:flex;align-items:center;justify-content:center;background:#fff;border-radius:3px;padding:3px 6px;height:34px;box-sizing:border-box}
+.hrow .cobrand .slogo img{height:26px;max-width:120px;width:auto;display:block;object-fit:contain}
+.hrow .cobrand .sname{font-family:var(--display);font-weight:700;font-size:13.5px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.hrow .cobrand .sname small{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#8D7C78;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(min-width:901px){header.site.cobranded .hrow .sub{flex-wrap:nowrap;gap:16px}header.site.cobranded .hrow .sub a{white-space:nowrap}header.site.cobranded .hrow .right{gap:14px}header.site.cobranded .hrow .who b,header.site.cobranded .hrow .who small{white-space:nowrap}}
+@media(max-width:1240px) and (min-width:901px){.hrow .cobrand .sname{max-width:150px}.hrow .cobrand .sname small{display:none}.hrow .cobrand .slogo img{max-width:90px}}
+@media(max-width:900px){.hrow .cobrand{border:0;padding-left:0;order:3;flex:0 0 100%}.hrow .cobrand .sname{max-width:none}}
+/* branded sign-in / landing block */
+.schoolhero{display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:var(--white);border:1px solid var(--line);border-left:5px solid var(--school-accent,var(--crimson));border-radius:var(--r);padding:16px 20px;margin:0 0 22px}
+.schoolhero img{height:56px;max-width:180px;object-fit:contain}
+.schoolhero .t{font-family:var(--display);font-weight:800;font-size:19px;margin:0}
+.schoolhero .s{font-family:var(--body);color:var(--muted);margin:2px 0 0;font-size:15px}
+.schoolhero .pw{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+.schoolhero .pw img{height:20px}
+@media(max-width:600px){.schoolhero .pw{margin-left:0}}
+/* accent swatches (Schools page) */
+.swatches{display:flex;flex-wrap:wrap;gap:8px}
+.swatches label{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--line);border-radius:var(--r);padding:6px 10px;cursor:pointer;font-size:13px;font-family:var(--ui)}
+.swatches label:has(input:checked){border-color:var(--ink);box-shadow:0 0 0 2px var(--paper-2)}
+.swatches input{position:absolute;opacity:0;width:0;height:0}
+.swatches i{width:18px;height:18px;border-radius:50%;display:inline-block}

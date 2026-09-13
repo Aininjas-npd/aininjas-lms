@@ -15,14 +15,17 @@ const sso = ACCOUNTS_URL && process.env.SSO_SECRET
 const safeReturn = v => (/^\/(?!\/)/.test(String(v || '')) ? String(v) : '');
 
 /* Create/update the local user from Accounts claims. Accounts-granted users are approved by definition. */
-function upsertFromSso({ sub, email, name, role }) {
+function upsertFromSso({ sub, email, name, role, scope }) {
   const em = String(email).toLowerCase();
   const r = role === 'admin' ? 'admin' : 'learner';
+  const slug = scope && /^[a-z0-9][a-z0-9-]{1,39}$/.test(scope.school_slug || '') ? scope.school_slug : null;   // school co-branding
   let u = db.prepare('SELECT * FROM users WHERE sso_sub=? OR email=?').get(String(sub), em);
   if (u) {
-    db.prepare(`UPDATE users SET email=?, sso_sub=?, name=?, role=?, status='approved', approved_at=COALESCE(approved_at, datetime('now')) WHERE id=?`).run(em, String(sub), name || u.name, r, u.id);
+    db.prepare(`UPDATE users SET email=?, sso_sub=?, name=?, role=?, status='approved', approved_at=COALESCE(approved_at, datetime('now')), school_slug=COALESCE(?, school_slug), organization=COALESCE(organization, ?) WHERE id=?`)
+      .run(em, String(sub), name || u.name, r, slug, scope && scope.school_name || null, u.id);
   } else {
-    const info = db.prepare(`INSERT INTO users (email, name, sso_sub, role, status, approved_at, display_handle) VALUES (?, ?, ?, ?, 'approved', datetime('now'), ?)`).run(em, name || em, String(sub), r, makeHandle());
+    const info = db.prepare(`INSERT INTO users (email, name, sso_sub, role, status, approved_at, display_handle, school_slug, organization) VALUES (?, ?, ?, ?, 'approved', datetime('now'), ?, ?, ?)`)
+      .run(em, name || em, String(sub), r, makeHandle(), slug, scope && scope.school_name || null);
     u = q.userById.get(info.lastInsertRowid);
     q.logEvent.run(u.id, null, null, 'access_granted', JSON.stringify({ email: em, via: 'accounts', role: r }));
     plugins.emit('user:approved', { userId: u.id });
@@ -56,7 +59,7 @@ router.post('/api/sso/sync', express.json({ verify: (req, res, buf) => { req.raw
   try { ev = sso.verifyWebhook(req.rawBody || '', req.headers); } catch (e) { return res.status(401).json({ error: e.message }); }
   const em = String(ev.user && ev.user.email || '').toLowerCase();
   if (!em) return res.status(400).json({ error: 'No user' });
-  if (ev.event === 'grant.updated' && ev.grant && ev.user.status !== 'disabled') { upsertFromSso({ sub: ev.user.id, email: em, name: ev.user.name, role: ev.grant.role }); return res.json({ ok: true, applied: 'updated' }); }
+  if (ev.event === 'grant.updated' && ev.grant && ev.user.status !== 'disabled') { upsertFromSso({ sub: ev.user.id, email: em, name: ev.user.name, role: ev.grant.role, scope: ev.grant.scope }); return res.json({ ok: true, applied: 'updated' }); }
   const u = q.userByEmail.get(em);
   if (u) {
     if (u.role === 'admin' && db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin' AND status='approved'").get().n <= 1) return res.json({ ok: true, applied: 'kept-last-admin' });
@@ -213,7 +216,7 @@ async function syncAllFromAccounts() {
   for (const g of grants) {
     if (g.status === 'disabled') { const u = q.userByEmail.get(String(g.email).toLowerCase()); if (u && u.status !== 'disabled') { db.prepare("UPDATE users SET status='disabled' WHERE id=?").run(u.id); disabled++; } continue; }
     const before = q.userByEmail.get(String(g.email).toLowerCase());
-    upsertFromSso({ sub: g.id, email: g.email, name: g.name, role: g.role });
+    upsertFromSso({ sub: g.id, email: g.email, name: g.name, role: g.role, scope: g.scope });
     if (before) updated++; else created++;
   }
   return { total: grants.length, created, updated, disabled };

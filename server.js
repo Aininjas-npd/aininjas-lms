@@ -5,6 +5,7 @@ const path = require('path');
 const { db, q, DATA_DIR } = require('./src/db');
 const auth = require('./src/auth');
 const plugins = require('./src/plugins');
+const brand = require('./src/brand');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,6 +26,7 @@ app.use(session({
   cookie: { httpOnly: true, sameSite: 'lax', secure: 'auto', maxAge: 30 * 24 * 3600 * 1000 },
 }));
 app.use(auth.currentUser);
+app.use(brand.context);                          // school co-branding: res.locals.brand / brandCss
 app.use((req, res, next) => {                    // template globals
   res.locals.siteName = process.env.SITE_NAME || 'AI Ninjas Academy';
   res.locals.mainSite = process.env.MAIN_SITE_URL || 'https://aininjas.com';

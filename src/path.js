@@ -117,7 +117,7 @@ function launchUrl({ user, step, course, baseUrl }) {
   const now = Math.floor(Date.now() / 1000);
   const jwt = ssoLib.sign({
     iss: 'aininjas-academy', aud: 'quiz-studio', sub: String(user.id), jti: crypto.randomBytes(8).toString('hex'), iat: now, exp: now + 3 * 3600,
-    email: user.email, name: user.name, school: user.organization || null, class_name: user.class_name || null,
+    email: user.email, name: user.name, school: user.organization || null, school_slug: user.school_slug || null, class_name: user.class_name || null,
     step_id: step.id, course_id: course.id, source: 'Academy',
     callback_url: `${baseUrl}/api/quiz-results`, return_url: `${baseUrl}/courses/${course.id}?done=${step.id}`,
   }, LAUNCH_SECRET);
