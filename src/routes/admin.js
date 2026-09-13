@@ -139,6 +139,12 @@ router.post('/courses/:id/path/steps/:stepId/:action', (req, res) => {
   else if (action === 'rename') pathLib.updateStep(+stepId, { title: String(req.body.title || '').trim() });
   res.redirect(`/admin/courses/${req.params.id}/path`);
 });
+router.post('/courses/:id/path/sequential', (req, res) => {
+  db.prepare('UPDATE courses SET sequential = 1 - sequential WHERE id=?').run(+req.params.id);
+  const c = q.courseById.get(req.params.id);
+  flash(req, 'success', c && c.sequential ? 'Sequence locked — students must finish each step before the next opens.' : 'Sequence unlocked — students may do steps in any order.');
+  res.redirect(`/admin/courses/${req.params.id}/path`);
+});
 router.post('/courses/:id/path/reset', (req, res) => { pathLib.clearPath(+req.params.id); flash(req, 'success', 'Path reset to the SCORM lessons.'); res.redirect(`/admin/courses/${req.params.id}/path`); });
 
 router.get('/courses/:id/export.csv', (req, res) => {

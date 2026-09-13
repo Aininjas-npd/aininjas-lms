@@ -5,6 +5,10 @@
 </div>
 <p class="muted">What a student sees, in order: <b>Learn</b> (a SCORM lesson), <b>Practice</b> (a Colab notebook), <b>Check</b> (a Quiz Studio quiz). The "Continue" button always takes them to the first unfinished step.<% if (!custom) { %> Right now this course uses its lessons as the path; adding a step below turns it into a custom path you can reorder.<% } %></p>
 
+<div class="card" style="margin-bottom:16px"><div class="row between wrap">
+  <div><strong><%= course.sequential ? '🔒 Sequence locked' : '🔓 Sequence open' %></strong><p class="muted small" style="margin:4px 0 0"><%= course.sequential ? 'Students must complete each step before the next one opens. Later steps show as locked.' : 'Students can open any step in any order; "Continue" still suggests the next unfinished one.' %></p></div>
+  <form method="post" action="/admin/courses/<%= course.id %>/path/sequential"><button class="btn small <%= course.sequential ? 'ghost' : '' %>" type="submit"><%= course.sequential ? 'Unlock sequence' : 'Lock the sequence' %></button></form>
+</div></div>
 <div class="fg2" style="align-items:start">
 <div class="card">
   <h3>Steps</h3>

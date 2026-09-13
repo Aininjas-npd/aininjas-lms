@@ -68,8 +68,9 @@ function stepFor(req, res) {
   if (!course) { res.status(404).render('error', { title: 'Not found', message: 'Course not found.' }); return null; }
   const enrollment = q.enrollment.get(req.user.id, course.id);
   if (req.user.role !== 'admin' && (!enrollment || enrollment.status !== 'active')) { res.status(403).render('error', { title: 'No access', message: 'You are not enrolled in this course.' }); return null; }
-  const step = pathLib.stepsFor(course.id).find(s => String(s.id) === String(req.params.stepId));
+  const step = pathLib.pathSummary(req.user.id, course.id).steps.find(s => String(s.id) === String(req.params.stepId));
   if (!step) { res.status(404).render('error', { title: 'Not found', message: 'That step no longer exists.' }); return null; }
+  if (step.locked && req.user.role !== 'admin') { flash(req, 'error', `Finish "${step.blockedBy ? step.blockedBy.title : 'the previous step'}" first — this course goes in order.`); res.redirect(`/courses/${course.id}`); return null; }
   return { course, step };
 }
 // "Continue" / step button: go wherever the step lives
@@ -122,6 +123,10 @@ router.get('/courses/:id/play/:scoId', requireLogin, (req, res) => {
   const enrollment = q.enrollment.get(req.user.id, course.id);
   if (req.user.role !== 'admin' && (!enrollment || enrollment.status !== 'active')) {
     return res.status(403).render('error', { title: 'No access', message: 'You are not enrolled in this course.' });
+  }
+  if (course.sequential && req.user.role !== 'admin') {   // locked sequence: the lesson's step must be reachable
+    const st = pathLib.pathSummary(req.user.id, course.id).steps.find(s => s.type === 'sco' && String(s.config.sco_id) === String(sco.id));
+    if (st && st.locked) { flash(req, 'error', `Finish "${st.blockedBy ? st.blockedBy.title : 'the previous step'}" first — this course goes in order.`); return res.redirect(`/courses/${course.id}`); }
   }
 
   // Ensure a progress row exists and compute entry mode

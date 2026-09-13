@@ -71,11 +71,17 @@ function pathSummary(userId, courseId) {
         if (p.score_json) { try { const sj = JSON.parse(p.score_json); score = sj.points != null ? `${sj.points}/${sj.max_points}` : null; detail = [sj.accuracy != null ? sj.accuracy + '%' : null, sj.belt || null].filter(Boolean).join(' · '); } catch {} }
       }
     }
-    return { ...st, status, score, detail, notebook, when };
+    return { ...st, status, score, detail, notebook, when, locked: false };
   });
+  // Locked sequence: a step opens only once every step before it is done
+  const course = q.courseById.get(courseId);
+  if (course && course.sequential) {
+    let blocked = false;
+    out.forEach((s, i) => { s.locked = blocked; s.blockedBy = blocked ? out.slice(0, i).find(x => x.status !== 'done') : null; if (s.status !== 'done') blocked = true; });
+  }
   const total = out.length, done = out.filter(s => s.status === 'done').length;
   const next = out.find(s => s.status !== 'done') || null;
-  return { steps: out, total, done, percent: total ? Math.round(100 * done / total) : 0, next,
+  return { steps: out, total, done, percent: total ? Math.round(100 * done / total) : 0, next, sequential: !!(course && course.sequential),
            status: total && done === total ? 'completed' : out.some(s => s.status !== 'todo') ? 'in_progress' : 'not_started' };
 }
 

@@ -107,3 +107,7 @@ The Academy has four roles: **Administrator** (AI Ninjas — everything), **Scho
 - **A student** (`/students/<id>`) — every course with each step's status, score, Colab notebook link and date; the same data the admin course grid shows, for one person.
 - Scoping is enforced server-side: a teacher gets "Not your class" outside their classes; a school admin never sees another school.
 
+## Locked sequence
+
+On a course's **Build learning path** page, **Lock the sequence** makes students complete each step before the next one opens: later steps show a 🔒 and "Locked — finish "…" first", and opening one directly (even by URL, including a SCORM lesson's player link) sends them back to the course page with the same message. A lesson counts as done when SCORM reports completed/passed; a Colab step when the student marks it done; a quiz when Quiz Studio posts the score. Unlock at any time — nothing is lost. Admins are never locked, so you can review any step.
+

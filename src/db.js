@@ -114,6 +114,8 @@ if (!ucols.includes('last_login_at')) db.exec('ALTER TABLE users ADD COLUMN last
 if (!ucols.includes('class_name')) db.exec('ALTER TABLE users ADD COLUMN class_name TEXT');
 if (!ucols.includes('school_slug')) db.exec('ALTER TABLE users ADD COLUMN school_slug TEXT');   // school co-branding (slug from Quiz Studio)
 if (!ucols.includes('classes')) db.exec("ALTER TABLE users ADD COLUMN classes TEXT NOT NULL DEFAULT '[]'");   // teacher: JSON list of the classes they may see
+const ccols = db.prepare('PRAGMA table_info(courses)').all().map(c => c.name);
+if (!ccols.includes('sequential')) db.exec('ALTER TABLE courses ADD COLUMN sequential INTEGER NOT NULL DEFAULT 0');   // 1 = steps must be completed in order
 const scols = db.prepare('PRAGMA table_info(scos)').all().map(c => c.name);
 if (!scols.includes('package')) db.exec("ALTER TABLE scos ADD COLUMN package TEXT");           // sub-folder of the package this SCO came from ('' = course root)
 if (!scols.includes('package_title')) db.exec("ALTER TABLE scos ADD COLUMN package_title TEXT");
