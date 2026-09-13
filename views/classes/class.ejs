@@ -1,0 +1,30 @@
+<%- include('../partials/header') %>
+<% const qs = user.role === 'admin' ? '?school=' + encodeURIComponent(sc.school.slug) : ''; const fmt = t => t ? t.slice(0, 10) : '—'; %>
+<p class="small"><a href="/classes<%= qs %>">← Classes</a></p>
+<div class="row between wrap">
+  <div><p class="eyebrow"><%= sc.school.name %></p><h1 style="margin-top:4px"><%= name %></h1></div>
+  <span class="actions"><a class="btn ghost small" href="/classes/<%= encodeURIComponent(name) %>/export.csv<%= qs %>">⬇ Export CSV</a></span>
+</div>
+<div class="stats">
+  <div class="card stat"><p class="eyebrow">Students</p><h2 style="margin:0"><%= stats.students %></h2></div>
+  <div class="card stat"><p class="eyebrow">Average completion</p><h2 style="margin:0"><%= stats.avgPercent %>%</h2><p class="small muted" style="margin:4px 0 0"><%= stats.completedAll %> finished everything · <%= stats.notStarted %> not started</p></div>
+  <div class="card stat"><p class="eyebrow">Active this week</p><h2 style="margin:0"><%= stats.activeWeek %></h2></div>
+  <div class="card stat"><p class="eyebrow">Quiz average</p><h2 style="margin:0"><%= stats.quizAvg != null ? stats.quizAvg + '%' : '—' %></h2></div>
+</div>
+<div class="card">
+  <div class="tw"><table class="table"><thead><tr><th>Student</th><% courses.forEach(c => { %><th><%= c.title %></th><% }) %><th>Overall</th><th class="num">Quiz avg</th><th>Last active</th><% if (canMove) { %><th>Class</th><% } %></tr></thead><tbody>
+  <% list.forEach(s => { %>
+    <tr><td><a href="/students/<%= s.user.id %>"><strong><%= s.user.name %></strong></a><br><span class="muted small"><%= s.user.email %></span></td>
+      <% courses.forEach(c => { const e = s.courses.find(x => x.course_id === c.id); %>
+        <td style="min-width:140px"><% if (e) { %><div class="progress" style="margin:4px 0"><i style="width:<%= e.summary.percent %>%"></i></div><span class="small muted"><%= e.summary.done %>/<%= e.summary.total %> · <%= e.summary.percent %>%</span><% } else { %><span class="muted small">not enrolled</span><% } %></td>
+      <% }) %>
+      <td style="min-width:120px"><% if (s.total) { %><b><%= s.percent %>%</b> <span class="small muted"><%= s.done %>/<%= s.total %> steps</span><% } else { %><span class="muted small">—</span><% } %></td>
+      <td class="num"><%= s.quizAvg != null ? s.quizAvg + '%' : '—' %></td>
+      <td class="small"><%= fmt(s.lastActive) %></td>
+      <% if (canMove) { %><td><form method="post" action="/students/<%= s.user.id %>/class" style="margin:0"><select name="class_name" style="width:auto" onchange="this.form.submit()"><option value="">— none —</option><% sc.classes.forEach(c => { %><option value="<%= c %>" <%= c === s.user.class_name ? 'selected' : '' %>><%= c %></option><% }) %></select></form></td><% } %>
+    </tr>
+  <% }) %>
+  <% if (!list.length) { %><tr><td colspan="<%= courses.length + 5 %>" class="muted">No students in this class yet. Students join by picking their class the first time they sign in<%= canMove ? ', or place them from the Classes page' : '' %>.</td></tr><% } %>
+  </tbody></table></div>
+</div>
+<%- include('../partials/footer') %>

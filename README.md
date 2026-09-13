@@ -97,3 +97,13 @@ Schools are managed in Quiz Studio (name, logo, one accent colour from a curated
 - **Quiz steps:** the launch token now carries `school_slug`, so Quiz Studio picks the right school's link by slug (falls back to the school name).
 - AI Ninjas stays visible everywhere ("Powered by" mark, the AI Ninjas wordmark in the header): this is co-branding, not white-labelling.
 
+## Class views for teachers and school admins
+
+The Academy has four roles: **Administrator** (AI Ninjas — everything), **School Admin** (every class and student of one school), **Teacher** (chosen classes of one school) and **Learner**. School Admin and Teacher are granted in AI Ninjas Accounts exactly like their Quiz Studio counterparts — pick the school (and classes for a teacher); the list comes from Quiz Studio via this app's `/api/sso/scopes`.
+
+- **Students join a class once.** The first time a student whose school has classes opens the Academy they are asked "Which class are you in?" (`/pick-class`). School admins can move students between classes from the Classes page, a class page, or a student page; teachers cannot.
+- **Classes** (`/classes`) — one card per class: students, average completion, how many finished everything / not started, active this week, quiz average. Administrators pick the school at the top.
+- **A class** (`/classes/<name>`) — per student: progress per course, overall %, quiz average, last active; CSV export.
+- **A student** (`/students/<id>`) — every course with each step's status, score, Colab notebook link and date; the same data the admin course grid shows, for one person.
+- Scoping is enforced server-side: a teacher gets "Not your class" outside their classes; a school admin never sees another school.
+

@@ -1,0 +1,36 @@
+<%- include('../partials/header') %>
+<% const qs = sc.school && user.role === 'admin' ? '?school=' + encodeURIComponent(sc.school.slug) : ''; %>
+<div class="row between wrap">
+  <div><p class="eyebrow">Classes</p><h1 style="margin-top:4px"><%= sc.school ? sc.school.name : 'Classes' %></h1></div>
+  <% if (user.role === 'admin' && sc.schools.length > 1) { %>
+  <form method="get" action="/classes" class="row gap"><label class="small muted">School</label>
+    <select name="school" style="width:auto" onchange="this.form.submit()"><% sc.schools.forEach(s => { %><option value="<%= s.slug %>" <%= sc.school && s.slug === sc.school.slug ? 'selected' : '' %>><%= s.name %></option><% }) %></select></form>
+  <% } %>
+</div>
+<% if (noSchool) { %>
+  <div class="card"><h3>No school yet</h3><p class="muted"><%= user.role === 'admin' ? 'Add a school in Quiz Studio → Schools first.' : 'Your account is not linked to a school yet — ask your AI Ninjas contact to set it on your access.' %></p></div>
+<% } else if (!cards.length) { %>
+  <div class="card"><h3>No classes yet</h3><p class="muted">This school has no classes listed. Add them in Quiz Studio → Schools (they are the same classes used for quizzes).</p></div>
+<% } else { %>
+<div class="grid">
+<% cards.forEach(c => { %>
+  <a class="card tile" href="/classes/<%= encodeURIComponent(c.name) %><%= qs %>">
+    <div class="row between"><h3 style="margin:0"><%= c.name %></h3><span class="badge <%= c.students ? 'active' : 'pending' %>"><%= c.students %> student<%= c.students === 1 ? '' : 's' %></span></div>
+    <div class="progress" style="margin:12px 0 6px"><i style="width:<%= c.avgPercent %>%"></i></div>
+    <p class="small muted" style="margin:0"><b><%= c.avgPercent %>%</b> average completion · <%= c.completedAll %> finished everything · <%= c.notStarted %> not started</p>
+    <p class="small muted" style="margin:6px 0 0"><%= c.activeWeek %> active this week<% if (c.quizAvg != null) { %> · quiz average <b><%= c.quizAvg %>%</b><% } %></p>
+  </a>
+<% }) %>
+</div>
+<% } %>
+<% if (unassigned.length) { %>
+<div class="card" style="margin-top:18px"><h3>Not in any class yet <span class="muted small">(<%= unassigned.length %>)</span></h3>
+  <p class="muted small">These students signed in but haven't picked a class. They'll be asked the next time they open the Academy — or place them now.</p>
+  <table class="table"><thead><tr><th>Student</th><th>Email</th><th>Class</th></tr></thead><tbody>
+  <% unassigned.forEach(s => { %>
+    <tr><td><a href="/students/<%= s.user.id %>"><%= s.user.name %></a></td><td class="small muted"><%= s.user.email %></td>
+      <td><form method="post" action="/students/<%= s.user.id %>/class" class="row gap" style="margin:0"><select name="class_name" style="width:auto" onchange="this.form.submit()"><option value="">Choose…</option><% sc.classes.forEach(c => { %><option value="<%= c %>"><%= c %></option><% }) %></select></form></td></tr>
+  <% }) %></tbody></table>
+</div>
+<% } %>
+<%- include('../partials/footer') %>

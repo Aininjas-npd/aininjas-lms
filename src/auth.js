@@ -15,17 +15,20 @@ const sso = ACCOUNTS_URL && process.env.SSO_SECRET
 const safeReturn = v => (/^\/(?!\/)/.test(String(v || '')) ? String(v) : '');
 
 /* Create/update the local user from Accounts claims. Accounts-granted users are approved by definition. */
+const ROLES = ['admin', 'school_admin', 'teacher', 'learner'];
+const STAFF = ['admin', 'school_admin', 'teacher'];
 function upsertFromSso({ sub, email, name, role, scope }) {
   const em = String(email).toLowerCase();
-  const r = role === 'admin' ? 'admin' : 'learner';
+  const r = ROLES.includes(role) ? role : 'learner';
   const slug = scope && /^[a-z0-9][a-z0-9-]{1,39}$/.test(scope.school_slug || '') ? scope.school_slug : null;   // school co-branding
+  const classes = JSON.stringify(r === 'teacher' && Array.isArray(scope && scope.classes) ? scope.classes : []);
   let u = db.prepare('SELECT * FROM users WHERE sso_sub=? OR email=?').get(String(sub), em);
   if (u) {
-    db.prepare(`UPDATE users SET email=?, sso_sub=?, name=?, role=?, status='approved', approved_at=COALESCE(approved_at, datetime('now')), school_slug=COALESCE(?, school_slug), organization=COALESCE(organization, ?) WHERE id=?`)
-      .run(em, String(sub), name || u.name, r, slug, scope && scope.school_name || null, u.id);
+    db.prepare(`UPDATE users SET email=?, sso_sub=?, name=?, role=?, classes=?, status='approved', approved_at=COALESCE(approved_at, datetime('now')), school_slug=COALESCE(?, school_slug), organization=COALESCE(organization, ?) WHERE id=?`)
+      .run(em, String(sub), name || u.name, r, classes, slug, scope && scope.school_name || null, u.id);
   } else {
-    const info = db.prepare(`INSERT INTO users (email, name, sso_sub, role, status, approved_at, display_handle, school_slug, organization) VALUES (?, ?, ?, ?, 'approved', datetime('now'), ?, ?, ?)`)
-      .run(em, name || em, String(sub), r, makeHandle(), slug, scope && scope.school_name || null);
+    const info = db.prepare(`INSERT INTO users (email, name, sso_sub, role, classes, status, approved_at, display_handle, school_slug, organization) VALUES (?, ?, ?, ?, ?, 'approved', datetime('now'), ?, ?, ?)`)
+      .run(em, name || em, String(sub), r, classes, makeHandle(), slug, scope && scope.school_name || null);
     u = q.userById.get(info.lastInsertRowid);
     q.logEvent.run(u.id, null, null, 'access_granted', JSON.stringify({ email: em, via: 'accounts', role: r }));
     plugins.emit('user:approved', { userId: u.id });
@@ -44,13 +47,20 @@ router.get('/auth/sso/callback', (req, res) => {
     db.prepare("UPDATE users SET last_login_at=datetime('now') WHERE id=?").run(u.id);
     req.session.regenerate(() => {
       req.session.userId = u.id;
-      const dest = safeReturn(req.query.return) || (u.role === 'admin' ? '/admin' : '/dashboard');
+      const dest = safeReturn(req.query.return) || homeFor(u);
       req.session.save(() => res.redirect(dest));
     });
   } catch (e) {
     console.warn('[sso]', e.message);
     res.status(400).render('error', { title: 'Sign-in failed', message: e.message + ' — go back to your AI Ninjas account and try again.' });
   }
+});
+/* Accounts asks here which schools/classes a School Admin or Teacher can be limited to (the list lives in Quiz Studio) */
+router.get('/api/sso/scopes', async (req, res) => {
+  const m = /^Bearer\s+(.+)$/.exec(req.headers.authorization || '');
+  if (!sso || !m || m[1] !== process.env.SSO_SECRET) return res.status(401).json({ error: 'unauthorized' });
+  const schools = await require('./brand').listSchools();
+  res.json(schools.map(s => ({ id: s.id, name: s.name, classes: s.classes || [], slug: s.slug })));
 });
 /* Accounts pushes every access change here */
 router.post('/api/sso/sync', express.json({ verify: (req, res, buf) => { req.rawBody = buf.toString('utf8'); } }), (req, res) => {
@@ -81,8 +91,19 @@ function currentUser(req, res, next) {
 function requireLogin(req, res, next) {
   if (!req.user) { req.session.returnTo = req.originalUrl; return res.redirect(sso ? '/auth/sso?return=' + encodeURIComponent(req.originalUrl) : '/login'); }
   if (req.user.status !== 'approved') return res.redirect('/pending');
+  // a student whose school has classes picks theirs once (teachers can correct it later)
+  if (req.user.role === 'learner' && req.user.school_slug && !req.user.class_name && res.locals.brand && (res.locals.brand.classes || []).length && !req.path.startsWith('/pick-class')) {
+    req.session.returnTo = req.originalUrl; return res.redirect('/pick-class');
+  }
   next();
 }
+/* Teachers, school admins and AI Ninjas admins: the class views */
+function requireStaff(req, res, next) {
+  if (!req.user) { req.session.returnTo = req.originalUrl; return res.redirect(sso ? '/auth/sso?return=' + encodeURIComponent(req.originalUrl) : '/login'); }
+  if (!STAFF.includes(req.user.role)) return res.status(403).render('error', { title: 'Teachers only', message: 'This page is for teachers and school admins.' });
+  next();
+}
+const homeFor = u => u.role === 'admin' ? '/admin' : (u.role === 'teacher' || u.role === 'school_admin') ? '/classes' : '/dashboard';
 function requireAdmin(req, res, next) {
   if (!req.user) return res.redirect('/login');
   if (req.user.role !== 'admin') return res.status(403).render('error', { title: 'Forbidden', message: 'Admins only.' });
@@ -126,7 +147,7 @@ router.post('/login', (req, res) => {
   }
   req.session.userId = user.id;
   db.prepare("UPDATE users SET last_login_at=datetime('now') WHERE id=?").run(user.id);
-  const dest = req.session.returnTo || (user.role === 'admin' ? '/admin' : '/dashboard');
+  const dest = req.session.returnTo || homeFor(user);
   delete req.session.returnTo;
   res.redirect(user.status === 'approved' ? dest : '/pending');
 });
@@ -192,7 +213,7 @@ router.get('/auth/google/callback', async (req, res) => {
       plugins.emit('user:requested', { userId: user.id });
     }
     req.session.userId = user.id;
-    res.redirect(user.status === 'approved' ? (user.role === 'admin' ? '/admin' : '/dashboard') : '/pending');
+    res.redirect(user.status === 'approved' ? homeFor(user) : '/pending');
   } catch (err) {
     console.error('[google]', err);
     res.status(400).render('error', { title: 'Sign-in failed', message: err.message });
@@ -221,4 +242,4 @@ async function syncAllFromAccounts() {
   }
   return { total: grants.length, created, updated, disabled };
 }
-module.exports = { router, currentUser, requireLogin, requireAdmin, flash, ssoEnabled: !!sso, accountsUrl: ACCOUNTS_URL, syncAllFromAccounts };
+module.exports = { router, currentUser, requireLogin, requireAdmin, requireStaff, homeFor, STAFF, flash, ssoEnabled: !!sso, accountsUrl: ACCOUNTS_URL, syncAllFromAccounts };

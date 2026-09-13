@@ -44,6 +44,7 @@ plugins.load(app, {
 
 app.use(auth.router);
 app.use(require('./src/routes/learner'));
+app.use(require('./src/routes/classes'));   // teacher / school-admin class views + student class picker
 app.use('/admin', require('./src/routes/admin'));
 
 app.use((req, res) => res.status(404).render('error', { title: 'Not found', message: 'Page not found.' }));

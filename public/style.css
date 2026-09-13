@@ -29,3 +29,8 @@ ol.path{list-style:none;padding:0;margin:18px 0}
 .stepk{display:inline-block;width:18px;height:18px;border-radius:50%;font-family:var(--display);font-size:10px;font-weight:800;line-height:18px;text-align:center;color:#fff;background:var(--line)}
 .stepk.sco{background:var(--steel)}.stepk.colab{background:var(--brass)}.stepk.quiz{background:var(--crimson)}
 .path.compact .body form.row{flex-wrap:nowrap}.path.compact .body form.row input{width:auto;flex:1;padding:7px 10px;font-size:14px}
+/* class views */
+a.card.tile{display:block;color:inherit;text-decoration:none}a.card.tile:hover{border-color:var(--crimson);text-decoration:none}
+.tw{overflow-x:auto}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}.stats .stat h2{font-size:26px}
+@media(max-width:900px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}

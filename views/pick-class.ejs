@@ -1,0 +1,12 @@
+<%- include('partials/header') %>
+<div class="auth">
+  <% if (locals.brand) { %><div class="schoolhero"><% if (brand.logo) { %><img src="<%= brand.logo %>" alt="" style="height:56px;width:auto;max-width:180px"><% } %><div><p class="t"><%= brand.name %></p><p class="s">Welcome, <%= user.name.split(' ')[0] %>.</p></div></div><% } %>
+  <form class="card" method="post" action="/pick-class">
+    <h2 style="margin-top:0">Which class are you in?</h2>
+    <p class="muted">This puts you on your teacher's class list. You only do this once — your teacher can change it if needed.</p>
+    <div class="field"><label>Class</label>
+      <select name="class_name" required autofocus><option value="">Choose…</option><% classes.forEach(c => { %><option value="<%= c %>"><%= c %></option><% }) %></select></div>
+    <button class="btn block" type="submit">Continue →</button>
+  </form>
+</div>
+<%- include('partials/footer') %>

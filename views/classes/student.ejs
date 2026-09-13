@@ -1,0 +1,30 @@
+<%- include('../partials/header') %>
+<% const u = s.user; const qs = user.role === 'admin' && u.school_slug ? '?school=' + encodeURIComponent(u.school_slug) : ''; const fmt = t => t ? t.slice(0, 16).replace('T', ' ') : '—'; %>
+<p class="small"><a href="/classes<%= qs %>">← Classes</a><% if (u.class_name) { %> · <a href="/classes/<%= encodeURIComponent(u.class_name) %><%= qs %>"><%= u.class_name %></a><% } %></p>
+<div class="row between wrap">
+  <div><p class="eyebrow"><%= u.organization || (sc.school && sc.school.name) || '' %><%= u.class_name ? ' · ' + u.class_name : '' %></p><h1 style="margin-top:4px"><%= u.name %></h1><p class="muted small"><%= u.email %> · joined <%= (u.created_at || '').slice(0,10) %> · last active <%= fmt(s.lastActive) %></p></div>
+  <% if (user.role !== 'teacher' && sc.classes.length) { %>
+  <form method="post" action="/students/<%= u.id %>/class" class="row gap"><label class="small muted">Class</label><select name="class_name" style="width:auto" onchange="this.form.submit()"><option value="">— none —</option><% sc.classes.forEach(c => { %><option value="<%= c %>" <%= c === u.class_name ? 'selected' : '' %>><%= c %></option><% }) %></select></form>
+  <% } %>
+</div>
+<div class="stats">
+  <div class="card stat"><p class="eyebrow">Overall</p><h2 style="margin:0"><%= s.percent %>%</h2><p class="small muted" style="margin:4px 0 0"><%= s.done %> of <%= s.total %> steps</p></div>
+  <div class="card stat"><p class="eyebrow">Courses</p><h2 style="margin:0"><%= s.courses.length %></h2><p class="small muted" style="margin:4px 0 0"><%= s.completed %> completed</p></div>
+  <div class="card stat"><p class="eyebrow">Quiz average</p><h2 style="margin:0"><%= s.quizAvg != null ? s.quizAvg + '%' : '—' %></h2></div>
+</div>
+<% if (!s.courses.length) { %><div class="card"><p class="muted">Not enrolled in any course yet.</p></div><% } %>
+<% s.courses.forEach(c => { const sm = c.summary; %>
+<div class="card">
+  <div class="row between wrap"><h3 style="margin:0"><%= c.title %></h3><span class="badge <%= sm.status %>"><%= sm.status.replace('_', ' ') %></span></div>
+  <div class="progress" style="margin:10px 0 4px"><i style="width:<%= sm.percent %>%"></i></div>
+  <p class="small muted" style="margin:0 0 10px"><%= sm.done %>/<%= sm.total %> · <%= sm.percent %>%<% if (sm.next) { %> · next: <%= sm.next.title %><% } %></p>
+  <table class="table"><thead><tr><th>#</th><th>Step</th><th>Status</th><th>Score</th><th>When</th></tr></thead><tbody>
+  <% sm.steps.forEach((st, i) => { %>
+    <tr><td><span class="stepk <%= st.type %>"><%= i + 1 %></span></td><td><%= st.title %> <span class="muted small"><%= st.kind %></span></td>
+      <td><% if (st.status === 'done') { %><span class="badge active">done</span><% } else if (st.status === 'started') { %><span class="badge pending">in progress</span><% } else { %><span class="muted">—</span><% } %></td>
+      <td><%= st.score != null ? st.score : '' %><% if (st.detail) { %> <span class="muted small"><%= st.detail %></span><% } %><% if (st.notebook) { %> <a href="<%= st.notebook %>" target="_blank" rel="noopener">📓 notebook</a><% } %></td>
+      <td class="small muted"><%= fmt(st.when) %></td></tr>
+  <% }) %></tbody></table>
+</div>
+<% }) %>
+<%- include('../partials/footer') %>

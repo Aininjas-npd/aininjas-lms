@@ -2,7 +2,7 @@
 const express = require('express');
 const path = require('path');
 const { db, q, DATA_DIR, courseSummary } = require('../db');
-const { requireLogin, flash } = require('../auth');
+const { requireLogin, flash, homeFor } = require('../auth');
 const plugins = require('../plugins');
 const pathLib = require('../path');
 const brand = require('../brand');
@@ -11,7 +11,7 @@ const router = express.Router();
 const baseUrl = req => (process.env.BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
 
 router.get('/', (req, res) => {
-  if (req.user && req.user.status === 'approved') return res.redirect(req.user.role === 'admin' ? '/admin' : '/dashboard');
+  if (req.user && req.user.status === 'approved') return res.redirect(homeFor(req.user));
   res.render('home', { title: res.locals.brand ? res.locals.brand.name : 'AI Ninjas Academy', courses: q.courses.all().filter(c => c.is_published) });
 });
 
@@ -23,7 +23,7 @@ router.get('/s/:slug', async (req, res) => {
   if (!b) return res.status(404).render('error', { title: 'Unknown school link', message: `There is no school at /s/${slug}. Check the link your school gave you, or go to the Academy home page.` });
   brand.setCookie(res, b.slug);
   if (req.user && req.user.role !== 'admin' && !req.user.school_slug) db.prepare('UPDATE users SET school_slug=? WHERE id=?').run(b.slug, req.user.id);
-  res.redirect(req.user && req.user.status === 'approved' ? '/dashboard' : '/');
+  res.redirect(req.user && req.user.status === 'approved' ? homeFor(req.user) : '/');
 });
 
 router.get('/dashboard', requireLogin, (req, res) => {
