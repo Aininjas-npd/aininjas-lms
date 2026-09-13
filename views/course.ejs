@@ -1,21 +1,53 @@
 <%- include('partials/header') %>
 <a href="/dashboard" class="muted small">← My courses</a>
-<h1><%= course.title %></h1>
-<p class="muted"><%= course.description || '' %></p>
-<div class="card">
-  <div class="row between"><strong>Progress</strong><span class="badge <%= summary.status %>"><%= summary.status.replace('_',' ') %></span></div>
-  <div class="progress"><i style="width:<%= summary.percent %>%"></i></div>
-  <p class="small muted"><%= summary.done %>/<%= summary.total %> lessons complete · <%= Math.round(summary.seconds/60) %> min spent<% if (summary.avgScore != null) { %> · average score <%= summary.avgScore %><% } %></p>
+<div class="row between" style="align-items:flex-end">
+  <div><h1><%= course.title %></h1><p class="muted" style="margin:0"><%= course.description || '' %></p></div>
+  <% if (lp.next) { %><a class="btn" href="/courses/<%= course.id %>/steps/<%= lp.next.id %>/go"><%= lp.status === 'not_started' ? 'Start' : 'Continue' %>: <%= lp.next.title %> →</a>
+  <% } else if (lp.total) { %><span class="badge completed" style="font-size:12px">Course complete</span><% } %>
 </div>
-<div class="card">
-  <h3>Lessons</h3>
-  <table class="table"><thead><tr><th>#</th><th>Lesson</th><th>Status</th><th class="num">Score</th><th class="num">Time</th><th></th></tr></thead><tbody>
-  <% summary.rows.forEach((r, i) => { const st = r.lesson_status || 'not attempted'; %>
-    <tr><td><%= i+1 %></td><td><%= r.title %></td><td><span class="badge <%= st.replace(' ','_') %>"><%= st %></span></td>
-      <td class="num"><%= r.score_raw != null ? r.score_raw : '—' %></td><td class="num"><%= Math.round((r.total_seconds||0)/60) %> min</td>
-      <td class="num"><a class="btn small <%= ['completed','passed'].includes(st) ? 'ghost' : '' %>" href="/courses/<%= course.id %>/play/<%= r.sco_id %>"><%= st === 'not attempted' ? 'Start' : ['completed','passed'].includes(st) ? 'Review' : 'Resume' %></a></td></tr>
-  <% }) %>
-  </tbody></table>
+
+<div class="card" style="margin-top:18px">
+  <div class="row between"><strong>Your path</strong><span class="badge <%= lp.status %>"><%= lp.status.replace('_',' ') %></span></div>
+  <div class="progress"><i style="width:<%= lp.percent %>%"></i></div>
+  <p class="small muted"><%= lp.done %> of <%= lp.total %> steps complete</p>
 </div>
+
+<ol class="path">
+<% lp.steps.forEach((s, i) => { const isNext = lp.next && lp.next.id === s.id; const done = s.status === 'done'; %>
+  <li class="step <%= s.status %> <%= isNext ? 'next' : '' %> <%= s.type %>" id="step-<%= s.id %>">
+    <div class="num"><%= done ? '✓' : i + 1 %></div>
+    <div class="body">
+      <div class="kind"><%= s.kind %><%= s.type === 'colab' ? ' · Google Colab' : s.type === 'quiz' ? ' · Quiz' : s.type === 'sco' ? ' · Lesson' : '' %></div>
+      <h3><%= s.title %></h3>
+      <% if (s.type === 'colab' && s.config.instructions) { %><p class="small serif"><%= s.config.instructions %></p><% } %>
+      <% if (s.type === 'note' && s.config.html) { %><div class="small serif"><%- s.config.html %></div><% } %>
+      <p class="small muted meta">
+        <% if (done) { %>Completed<%= s.when ? ' · ' + s.when.slice(0,10) : '' %><% } else if (s.status === 'started') { %>In progress<% } else { %>Not started<% } %>
+        <% if (s.score != null) { %> · score <b><%= s.score %></b><% } %><% if (s.detail) { %> · <%= s.detail %><% } %>
+        <% if (s.notebook) { %> · <a href="<%= s.notebook %>" target="_blank" rel="noopener">your notebook</a><% } %>
+      </p>
+      <% if (String(justDone) === String(s.id) && s.type === 'quiz' && !done) { %><p class="small muted">Waiting for your score from Quiz Studio… <a href="/courses/<%= course.id %>">refresh</a></p><% } %>
+    </div>
+    <div class="act">
+      <% if (s.type === 'sco') { %>
+        <a class="btn small <%= done ? 'ghost' : '' %>" href="/courses/<%= course.id %>/steps/<%= s.id %>/go"><%= done ? 'Review' : s.status === 'started' ? 'Resume' : 'Start' %></a>
+      <% } else if (s.type === 'quiz') { %>
+        <% if (quizEnabled) { %><a class="btn small <%= done ? 'ghost' : '' %>" href="/courses/<%= course.id %>/steps/<%= s.id %>/go" target="_blank" rel="noopener"><%= done ? 'Try again' : 'Take the quiz' %> ↗</a><% } else { %><span class="badge">quiz offline</span><% } %>
+      <% } else if (s.type === 'colab') { %>
+        <a class="btn small <%= done ? 'ghost' : '' %>" href="/courses/<%= course.id %>/steps/<%= s.id %>/go" target="_blank" rel="noopener">Open in Colab ↗</a>
+        <% if (!done) { %>
+        <form method="post" action="/courses/<%= course.id %>/steps/<%= s.id %>/done" class="donebox">
+          <input type="url" name="notebook_url" placeholder="Paste your notebook's share link (optional)">
+          <button class="btn small ok" type="submit">Mark as done</button>
+        </form>
+        <% } %>
+      <% } else if (s.type === 'note') { %>
+        <% if (!done) { %><form method="post" action="/courses/<%= course.id %>/steps/<%= s.id %>/done"><button class="btn small ghost" type="submit">Got it</button></form><% } %>
+      <% } %>
+    </div>
+  </li>
+<% }) %>
+</ol>
+<% if (!lp.total) { %><p class="muted">This course has no steps yet.</p><% } %>
 <% widgets.forEach(w => { %><%- w %><% }) %>
 <%- include('partials/footer') %>

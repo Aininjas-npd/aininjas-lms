@@ -76,3 +76,10 @@ Password reset emails, SCORM 2004 / xAPI support, certificates plugin, Google Cl
 ## Single sign-on (AI Ninjas Accounts)
 
 Set `ACCOUNTS_URL` and `SSO_SECRET` (the Academy's secret under **Apps** in Accounts). Learners and admins given *Academy* access in Accounts sign in with one button; they're matched to existing users by email so progress is kept. Removing access in Accounts disables the user here (progress is retained). Local email/password and Google sign-in remain available at `/login?local=1`. The brand stylesheet is a pinned copy of `www.aininjas.com/brand-kit` (`public/aininjas-app.css`).
+
+
+## Learning paths (Learn → Practice → Check)
+
+Admin → course → **Build learning path**. A path is an ordered list of steps: **Learn** (a SCORM lesson), **Practice** (a Google Colab notebook link with instructions; the student opens it, then marks it done and can paste their notebook's share link), **Check** (a Quiz Studio quiz), or **Read** (a note). Students see one page per course with a single *Continue* button that always goes to the first unfinished step; the dashboard shows path progress. A course with no custom steps uses its lessons as the path, so nothing changes until you add a step.
+
+Quiz steps launch Quiz Studio with a signed token carrying the student's identity (the name gate is skipped, the attempt is tagged to the student) and Quiz Studio posts the score back to `/api/quiz-results`, which marks the step complete and keeps the best score. Requires `QUIZ_STUDIO_URL` and `QUIZ_LAUNCH_SECRET` here and the same `QUIZ_LAUNCH_SECRET` on Quiz Studio. The admin course page shows a class grid: every learner × every step, with quiz scores and notebook links.

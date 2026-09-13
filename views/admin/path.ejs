@@ -1,0 +1,73 @@
+<%- include('../partials/header') %>
+<a href="/admin/courses/<%= course.id %>" class="muted small">← <%= course.title %></a>
+<div class="row between wrap"><h1>Learning path</h1>
+  <% if (custom) { %><form method="post" action="/admin/courses/<%= course.id %>/path/reset" onsubmit="return confirm('Remove all custom steps and go back to the plain lesson list? Student quiz/Colab progress for these steps is deleted.')"><button class="btn small ghost" type="submit">Reset to lessons only</button></form><% } %>
+</div>
+<p class="muted">What a student sees, in order: <b>Learn</b> (a SCORM lesson), <b>Practice</b> (a Colab notebook), <b>Check</b> (a Quiz Studio quiz). The "Continue" button always takes them to the first unfinished step.<% if (!custom) { %> Right now this course uses its lessons as the path; adding a step below turns it into a custom path you can reorder.<% } %></p>
+
+<div class="fg2" style="align-items:start">
+<div class="card">
+  <h3>Steps</h3>
+  <% if (!steps.length) { %><p class="muted">No steps yet.</p><% } %>
+  <ol class="path compact">
+  <% steps.forEach((s, i) => { %>
+    <li class="step <%= s.type %>">
+      <div class="num"><%= i + 1 %></div>
+      <div class="body">
+        <div class="kind"><%= s.kind %></div>
+        <% if (s.custom) { %>
+        <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/rename" class="row gap"><input type="text" name="title" value="<%= s.title %>" style="max-width:340px"><button class="link small" type="submit">rename</button></form>
+        <% } else { %><h3><%= s.title %></h3><% } %>
+        <p class="small muted meta">
+          <% if (s.type === 'sco') { %>Lesson from the SCORM package<% } %>
+          <% if (s.type === 'quiz') { %>Quiz Studio #<%= s.config.quiz_id %> <%= s.config.quiz_title ? '· ' + s.config.quiz_title : '' %><% } %>
+          <% if (s.type === 'colab') { %><a href="<%= s.config.url %>" target="_blank" rel="noopener"><%= s.config.url %></a><% } %>
+        </p>
+      </div>
+      <% if (s.custom) { %>
+      <div class="act actions">
+        <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/up" class="inline"><button class="iconbtn" title="Move up" <%= i === 0 ? 'disabled' : '' %>>↑</button></form>
+        <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/down" class="inline"><button class="iconbtn" title="Move down" <%= i === steps.length - 1 ? 'disabled' : '' %>>↓</button></form>
+        <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/delete" class="inline" onsubmit="return confirm('Remove this step?')"><button class="iconbtn" title="Remove">✕</button></form>
+      </div>
+      <% } %>
+    </li>
+  <% }) %>
+  </ol>
+</div>
+
+<div>
+  <form class="card" method="post" action="/admin/courses/<%= course.id %>/path/steps" id="addstep">
+    <h3>Add a step</h3>
+    <div class="field"><label>Type</label>
+      <select name="type" id="stype" onchange="document.querySelectorAll('#addstep [data-for]').forEach(d=>d.hidden=d.dataset.for!==this.value)">
+        <option value="sco">Learn — SCORM lesson</option>
+        <option value="colab">Practice — Google Colab notebook</option>
+        <option value="quiz">Check — Quiz Studio quiz</option>
+        <option value="note">Read — a short note / instructions</option>
+      </select></div>
+    <div class="field"><label>Title <span class="muted">(optional — shown to students)</span></label><input type="text" name="title" placeholder="e.g. Level 1 · Loops in Python"></div>
+    <div data-for="sco" class="field"><label>Lesson</label><select name="sco_id"><% scos.forEach(s => { %><option value="<%= s.id %>"><%= s.title %></option><% }) %></select></div>
+    <div data-for="colab" hidden>
+      <div class="field"><label>Colab notebook link</label><input type="url" name="url" placeholder="https://colab.research.google.com/drive/…"><div class="hint">Share the notebook as "Anyone with the link can view"; students press <i>File → Save a copy in Drive</i>.</div></div>
+      <div class="field"><label>Instructions for students</label><textarea name="instructions" rows="3" placeholder="Complete exercises 1–4, then come back and mark this done."></textarea></div>
+    </div>
+    <div data-for="quiz" hidden class="field"><label>Quiz</label>
+      <% if (!quizEnabled) { %><p class="error">Quiz Studio isn't connected — set QUIZ_STUDIO_URL and QUIZ_LAUNCH_SECRET on the Academy (and QUIZ_LAUNCH_SECRET on Quiz Studio).</p>
+      <% } else if (quizError) { %><p class="error">Couldn't load quizzes from Quiz Studio: <%= quizError %></p>
+      <% } else if (!quizzes.length) { %><p class="muted">No published quizzes in Quiz Studio yet.</p>
+      <% } else { %>
+      <select name="quiz_id"><% quizzes.forEach(qz => { %><option value="<%= qz.id %>|<%= qz.title %>"><%= qz.title %> — <%= qz.items %> questions<%= qz.schools.length ? ' · ' + qz.schools.map(s => s.name).join(', ') : ' · no school link yet' %></option><% }) %></select>
+      <div class="hint">Students are launched straight into the quiz with their name filled in; the score comes back here automatically. The quiz uses the school link matching the student's school (or the first link).</div>
+      <% } %>
+    </div>
+    <div data-for="note" hidden class="field"><label>Note</label><textarea name="instructions" rows="4" placeholder="Welcome! This week…"></textarea></div>
+    <button class="btn" type="submit">Add step</button>
+  </form>
+  <div class="card"><h3>Tips</h3>
+    <p class="small serif">A typical week: <b>Learn</b> lesson → <b>Practice</b> Colab → <b>Check</b> quiz. Put the quiz after the Colab step when the quiz is how you grade the coding exercise.</p>
+    <p class="small serif">Students see the class leaderboard in Quiz Studio as before; you see every student's score per step on the course page and in Quiz Studio's dashboards.</p>
+  </div>
+</div>
+</div>
+<%- include('../partials/footer') %>

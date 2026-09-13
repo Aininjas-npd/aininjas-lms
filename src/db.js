@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS settings (
 const ucols = db.prepare('PRAGMA table_info(users)').all().map(c => c.name);
 if (!ucols.includes('sso_sub')) db.exec('ALTER TABLE users ADD COLUMN sso_sub TEXT');
 if (!ucols.includes('last_login_at')) db.exec('ALTER TABLE users ADD COLUMN last_login_at TEXT');
+if (!ucols.includes('class_name')) db.exec('ALTER TABLE users ADD COLUMN class_name TEXT');
 
 // ---- Seed the first admin from env ----
 function seedAdmin() {

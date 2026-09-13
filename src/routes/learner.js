@@ -4,8 +4,10 @@ const path = require('path');
 const { db, q, DATA_DIR, courseSummary } = require('../db');
 const { requireLogin, flash } = require('../auth');
 const plugins = require('../plugins');
+const pathLib = require('../path');
 
 const router = express.Router();
+const baseUrl = req => (process.env.BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
 
 router.get('/', (req, res) => {
   if (req.user && req.user.status === 'approved') return res.redirect(req.user.role === 'admin' ? '/admin' : '/dashboard');
@@ -15,7 +17,7 @@ router.get('/', (req, res) => {
 router.get('/dashboard', requireLogin, (req, res) => {
   const enrollments = db.prepare(`SELECT e.*, c.title, c.slug, c.description FROM enrollments e JOIN courses c ON c.id = e.course_id
                                   WHERE e.user_id = ? ORDER BY e.enrolled_at DESC`).all(req.user.id);
-  const mine = enrollments.map(e => ({ ...e, summary: courseSummary(req.user.id, e.course_id) }));
+  const mine = enrollments.map(e => ({ ...e, summary: pathLib.pathSummary(req.user.id, e.course_id) }));
   const enrolledIds = new Set(enrollments.map(e => e.course_id));
   const catalog = q.courses.all().filter(c => c.is_published && !enrolledIds.has(c.id));
   res.render('dashboard', { title: 'My courses', mine, catalog, widgets: plugins.widgets('learnerDashboard', req.user) });
@@ -42,9 +44,61 @@ router.get('/courses/:id', requireLogin, (req, res) => {
   if (req.user.role !== 'admin' && (!enrollment || enrollment.status !== 'active')) {
     return res.status(403).render('error', { title: 'No access', message: 'You are not enrolled in this course yet.' });
   }
-  const summary = courseSummary(req.user.id, course.id);
-  res.render('course', { title: course.title, course, summary, tree: JSON.parse(course.manifest_json),
+  const lp = pathLib.pathSummary(req.user.id, course.id);
+  res.render('course', { title: course.title, course, lp, justDone: req.query.done || null, quizEnabled: pathLib.quizEnabled(),
                          widgets: plugins.widgets('results', req.user, course) });
+});
+
+// ---- Learning-path steps ----
+function stepFor(req, res) {
+  const course = q.courseById.get(req.params.id);
+  if (!course) { res.status(404).render('error', { title: 'Not found', message: 'Course not found.' }); return null; }
+  const enrollment = q.enrollment.get(req.user.id, course.id);
+  if (req.user.role !== 'admin' && (!enrollment || enrollment.status !== 'active')) { res.status(403).render('error', { title: 'No access', message: 'You are not enrolled in this course.' }); return null; }
+  const step = pathLib.stepsFor(course.id).find(s => String(s.id) === String(req.params.stepId));
+  if (!step) { res.status(404).render('error', { title: 'Not found', message: 'That step no longer exists.' }); return null; }
+  return { course, step };
+}
+// "Continue" / step button: go wherever the step lives
+router.get('/courses/:id/steps/:stepId/go', requireLogin, (req, res) => {
+  const ctx = stepFor(req, res); if (!ctx) return;
+  const { course, step } = ctx;
+  if (step.type === 'sco') return res.redirect(`/courses/${course.id}/play/${step.config.sco_id}`);
+  if (step.type === 'quiz') {
+    if (!pathLib.quizEnabled()) return res.status(500).render('error', { title: 'Quiz not available', message: 'Quiz Studio is not connected to the Academy yet (QUIZ_STUDIO_URL / QUIZ_LAUNCH_SECRET).' });
+    pathLib.markStarted(req.user.id, step.id);
+    q.logEvent.run(req.user.id, course.id, null, 'quiz_launched', JSON.stringify({ step_id: step.id, quiz_id: step.config.quiz_id }));
+    return res.redirect(pathLib.launchUrl({ user: req.user, step, course, baseUrl: baseUrl(req) }));
+  }
+  if (step.type === 'colab') {
+    pathLib.markStarted(req.user.id, step.id);
+    q.logEvent.run(req.user.id, course.id, null, 'colab_opened', JSON.stringify({ step_id: step.id }));
+    return res.redirect(step.config.url);
+  }
+  if (step.type === 'note') { pathLib.markDone(req.user.id, step.id); return res.redirect(`/courses/${course.id}`); }
+  res.redirect(`/courses/${course.id}`);
+});
+// Practice step: student marks it done (optionally with their notebook share link)
+router.post('/courses/:id/steps/:stepId/done', requireLogin, (req, res) => {
+  const ctx = stepFor(req, res); if (!ctx) return;
+  const { course, step } = ctx;
+  if (!['colab', 'note'].includes(step.type)) return res.redirect(`/courses/${course.id}`);
+  const url = String(req.body.notebook_url || '').trim();
+  if (url && !/^https?:\/\//i.test(url)) { flash(req, 'error', 'The notebook link should start with https://'); return res.redirect(`/courses/${course.id}`); }
+  pathLib.markDone(req.user.id, step.id, { notebook_url: url || null });
+  q.logEvent.run(req.user.id, course.id, null, 'colab_done', JSON.stringify({ step_id: step.id, notebook: !!url }));
+  plugins.emit('step:completed', { userId: req.user.id, courseId: course.id, stepId: step.id, type: step.type });
+  flash(req, 'success', `Nice — "${step.title}" marked complete.`);
+  res.redirect(`/courses/${course.id}`);
+});
+// Quiz Studio posts scores here (signed with QUIZ_LAUNCH_SECRET)
+router.post('/api/quiz-results', express.json({ verify: (req, res, buf) => { req.rawBody = buf.toString('utf8'); } }), (req, res) => {
+  if (!pathLib.quizEnabled()) return res.status(404).json({ error: 'Quiz integration not configured' });
+  try {
+    const r = pathLib.applyQuizResult(req.rawBody || '', req.headers);
+    plugins.emit('step:completed', { userId: r.userId, courseId: r.step.course_id, stepId: r.step.id, type: 'quiz' });
+    res.json({ ok: true });
+  } catch (e) { console.warn('[quiz-results]', e.message); res.status(400).json({ error: e.message }); }
 });
 
 // ---- Player page: hosts the SCORM API and the SCO iframe ----

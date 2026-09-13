@@ -7,6 +7,7 @@ const { db, q, DATA_DIR, courseSummary } = require('../db');
 const { requireAdmin, flash, syncAllFromAccounts } = require('../auth');
 const { importPackage, deleteCourse } = require('../scorm');
 const plugins = require('../plugins');
+const pathLib = require('../path');
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -63,6 +64,7 @@ router.post('/courses/:id/delete', (req, res) => { deleteCourse(req.params.id); 
 
 // Course report: every enrolled learner and their per-SCO progress
 router.get('/courses/:id', (req, res) => {
+  req.grid = pathLib.classGrid(+req.params.id);
   const course = q.courseById.get(req.params.id);
   if (!course) return res.status(404).render('error', { title: 'Not found', message: 'Course not found.' });
   const scos = q.scosForCourse.all(course.id);
@@ -75,8 +77,41 @@ router.get('/courses/:id', (req, res) => {
     return { ...s, ...r };
   });
   const allUsers = db.prepare(`SELECT id, name, email FROM users WHERE status='approved' AND id NOT IN (SELECT user_id FROM enrollments WHERE course_id=?) ORDER BY name`).all(course.id);
-  res.render('admin/course', { title: course.title, course, scos, learners, heat, allUsers });
+  res.render('admin/course', { title: course.title, course, scos, learners, heat, allUsers, grid: req.grid, hasPath: pathLib.hasCustomPath(course.id) });
 });
+
+// ---- Learning path builder ----
+router.get('/courses/:id/path', async (req, res) => {
+  const course = q.courseById.get(req.params.id);
+  if (!course) return res.status(404).render('error', { title: 'Not found', message: 'Course not found.' });
+  let quizzes = [], quizError = null;
+  if (pathLib.quizEnabled()) { try { quizzes = await pathLib.listQuizzes(); } catch (e) { quizError = e.message; } }
+  res.render('admin/path', { title: 'Learning path · ' + course.title, course, steps: pathLib.stepsFor(course.id), custom: pathLib.hasCustomPath(course.id),
+    scos: q.scosForCourse.all(course.id), quizzes, quizError, quizEnabled: pathLib.quizEnabled(), quizUrl: pathLib.QUIZ_URL });
+});
+router.post('/courses/:id/path/steps', (req, res) => {
+  const course = q.courseById.get(req.params.id);
+  if (!course) return res.status(404).render('error', { title: 'Not found', message: 'Course not found.' });
+  const b = req.body, type = String(b.type || '');
+  try {
+    pathLib.materialise(course.id);
+    if (type === 'sco') { const sco = q.scoById.get(+b.sco_id); if (!sco || sco.course_id !== course.id) throw new Error('Pick a lesson'); pathLib.addStep(course.id, { type, title: b.title || sco.title, config: { sco_id: sco.id } }); }
+    else if (type === 'quiz') { if (!b.quiz_id) throw new Error('Pick a quiz'); const [qid, qtitle] = String(b.quiz_id).split('|'); pathLib.addStep(course.id, { type, title: b.title || qtitle || 'Quiz', config: { quiz_id: +qid, quiz_title: qtitle || '' } }); }
+    else if (type === 'colab') { if (!/^https?:\/\//i.test(b.url || '')) throw new Error('Paste the Colab notebook link (https://colab.research.google.com/…)'); pathLib.addStep(course.id, { type, title: b.title || 'Hands-on: Python in Colab', config: { url: b.url.trim(), instructions: b.instructions || '' } }); }
+    else if (type === 'note') { if (!b.instructions) throw new Error('Write the note text'); pathLib.addStep(course.id, { type, title: b.title || 'Read this first', config: { html: b.instructions } }); }
+    else throw new Error('Unknown step type');
+    flash(req, 'success', 'Step added.');
+  } catch (e) { flash(req, 'error', e.message); }
+  res.redirect(`/admin/courses/${course.id}/path`);
+});
+router.post('/courses/:id/path/steps/:stepId/:action', (req, res) => {
+  const { stepId, action } = req.params;
+  if (action === 'up' || action === 'down') pathLib.moveStep(+stepId, action);
+  else if (action === 'delete') pathLib.deleteStep(+stepId);
+  else if (action === 'rename') pathLib.updateStep(+stepId, { title: String(req.body.title || '').trim() });
+  res.redirect(`/admin/courses/${req.params.id}/path`);
+});
+router.post('/courses/:id/path/reset', (req, res) => { pathLib.clearPath(+req.params.id); flash(req, 'success', 'Path reset to the SCORM lessons.'); res.redirect(`/admin/courses/${req.params.id}/path`); });
 
 router.get('/courses/:id/export.csv', (req, res) => {
   const course = q.courseById.get(req.params.id);

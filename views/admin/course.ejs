@@ -1,6 +1,21 @@
 <%- include('../partials/header') %>
 <a href="/admin/courses" class="muted small">← Courses</a>
-<div class="row between wrap"><h1><%= course.title %></h1><a class="btn ghost small" href="/admin/courses/<%= course.id %>/export.csv">⬇ Export CSV</a></div>
+<div class="row between wrap"><h1><%= course.title %></h1><span class="actions"><a class="btn small" href="/admin/courses/<%= course.id %>/path"><%= hasPath ? 'Edit learning path' : 'Build learning path' %></a><a class="btn ghost small" href="/admin/courses/<%= course.id %>/export.csv">⬇ Export CSV</a></span></div>
+<% if (grid && grid.steps.length) { %>
+<div class="card"><h3>Class progress <span class="muted small">— every learner, every step</span></h3>
+  <div class="tw"><table class="table gridtbl"><thead><tr><th>Learner</th><% grid.steps.forEach((s, i) => { %><th title="<%= s.title %>"><span class="stepk <%= s.type %>"><%= i + 1 %></span> <%= s.kind %></th><% }) %><th class="num">Done</th></tr></thead><tbody>
+  <% grid.rows.forEach(r => { %>
+    <tr><td><strong><%= r.user.name %></strong><br><span class="muted small"><%= r.user.email %></span></td>
+      <% r.summary.steps.forEach(s => { %><td class="cell <%= s.status %>">
+        <% if (s.status === 'done') { %>✓<% if (s.score != null) { %> <b><%= s.score %></b><% } %><% if (s.notebook) { %> <a href="<%= s.notebook %>" target="_blank" rel="noopener" title="Notebook">📓</a><% } %><% } else if (s.status === 'started') { %><span class="muted">…</span><% } else { %><span class="muted">—</span><% } %>
+      </td><% }) %>
+      <td class="num"><%= r.summary.done %>/<%= r.summary.total %></td></tr>
+  <% }) %>
+  <% if (!grid.rows.length) { %><tr><td colspan="<%= grid.steps.length + 2 %>" class="muted">No active learners yet.</td></tr><% } %>
+  </tbody></table></div>
+  <p class="hint"><% grid.steps.forEach((s, i) => { %><span class="stepk <%= s.type %>"><%= i + 1 %></span> <%= s.title %>&nbsp;&nbsp; <% }) %></p>
+</div>
+<% } %>
 <div class="card"><h3>Lesson heat-map <span class="muted small">(hardest lessons first)</span></h3>
   <table class="table"><thead><tr><th>Lesson</th><th>Launch file</th><th class="num">Attempted</th><th class="num">Completed</th><th class="num">Avg score</th><th class="num">Avg time</th></tr></thead><tbody>
   <% heat.slice().sort((a,b)=>(a.avg_score??101)-(b.avg_score??101)).forEach(h => { %>
