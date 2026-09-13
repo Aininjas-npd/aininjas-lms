@@ -31,7 +31,8 @@ router.get('/dashboard', requireLogin, (req, res) => {
                                   WHERE e.user_id = ? ORDER BY e.enrolled_at DESC`).all(req.user.id);
   const mine = enrollments.map(e => ({ ...e, summary: pathLib.pathSummary(req.user.id, e.course_id) }));
   const enrolledIds = new Set(enrollments.map(e => e.course_id));
-  const catalog = q.courses.all().filter(c => c.is_published && !enrolledIds.has(c.id));
+  // Only courses an admin marked "open enrollment" are offered for self-enrol; everything else is assigned by an admin (Admin → Users → + enroll)
+  const catalog = q.courses.all().filter(c => c.is_published && c.open_enrollment && !enrolledIds.has(c.id));
   res.render('dashboard', { title: 'My courses', mine, catalog, widgets: plugins.widgets('learnerDashboard', req.user) });
 });
 

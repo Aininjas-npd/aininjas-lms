@@ -15,13 +15,13 @@
   </div>
 <% }) %>
 </div>
-<% if (!mine.length) { %><p class="muted">You're not enrolled in any course yet — pick one below.</p><% } %>
+<% if (!mine.length) { %><p class="muted"><%= catalog.length ? "You're not enrolled in any course yet — pick one below." : "No courses have been assigned to you yet. Your teacher or AI Ninjas will add you to a course; it will appear here." %></p><% } %>
 <% if (catalog.length) { %>
-<h2>Available courses</h2>
+<h2>Open courses</h2>
 <div class="grid">
 <% catalog.forEach(c => { %>
   <div class="card"><h3><%= c.title %></h3><p class="muted small"><%= c.description || '' %></p>
-    <form method="post" action="/courses/<%= c.id %>/enroll"><button class="btn small"><%= c.open_enrollment ? 'Enroll' : 'Request access' %></button></form></div>
+    <form method="post" action="/courses/<%= c.id %>/enroll"><button class="btn small">Enroll</button></form></div>
 <% }) %>
 </div>
 <% } %>

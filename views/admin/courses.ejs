@@ -7,7 +7,7 @@
     <label>Title</label><input type="text" name="title" placeholder="e.g. Python Foundations — Grade 7" id="ctitle">
     <label>Description <span class="muted">(optional)</span></label><textarea name="description"></textarea>
     <label>Start with a SCORM 1.2 package <span class="muted">(optional — you can add packages later on the learning path)</span></label><input type="file" name="package" accept=".zip" onchange="document.getElementById('ctitle').required=!this.files.length">
-    <label class="check"><input type="checkbox" name="open_enrollment"> Open enrollment — any approved learner can self-enroll (otherwise they request and you approve)</label>
+    <label class="check"><input type="checkbox" name="open_enrollment"> Open enrollment — shown on every learner's dashboard to self-enroll (otherwise it appears only for learners you enroll)</label>
     <p><button class="btn">Create course</button></p>
   </form>
 </div>
@@ -16,7 +16,7 @@
   <tr><td><a href="/admin/courses/<%= c.id %>"><strong><%= c.title %></strong></a><br><span class="muted small"><%= c.slug %></span></td>
     <td><%= c.scoCount %></td><td><%= c.enrolled %></td><td><%= c.completed %></td>
     <td><form method="post" action="/admin/courses/<%= c.id %>/toggle" class="inline"><input type="hidden" name="field" value="is_published"><button class="link"><span class="badge <%= c.is_published ? 'active' : '' %>"><%= c.is_published ? 'published' : 'hidden' %></span></button></form></td>
-    <td><form method="post" action="/admin/courses/<%= c.id %>/toggle" class="inline"><input type="hidden" name="field" value="open_enrollment"><button class="link"><span class="badge <%= c.open_enrollment ? 'active' : 'pending' %>"><%= c.open_enrollment ? 'open' : 'approval required' %></span></button></form></td>
+    <td><form method="post" action="/admin/courses/<%= c.id %>/toggle" class="inline"><input type="hidden" name="field" value="open_enrollment"><button class="link"><span class="badge <%= c.open_enrollment ? 'active' : 'pending' %>"><%= c.open_enrollment ? 'open' : 'assigned by admin' %></span></button></form></td>
     <td class="actions"><a class="btn small" href="/admin/courses/<%= c.id %>/path">Path</a><a class="btn small ghost" href="/admin/courses/<%= c.id %>">Report</a><a class="btn small ghost" href="/admin/courses/<%= c.id %>/export.csv">CSV</a>
       <form method="post" action="/admin/courses/<%= c.id %>/delete" onsubmit="return confirm('Delete this course and all progress?')"><button class="btn small danger">Delete</button></form></td></tr>
 <% }) %>
