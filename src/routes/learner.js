@@ -26,6 +26,17 @@ router.get('/s/:slug', async (req, res) => {
   res.redirect(req.user && req.user.status === 'approved' ? homeFor(req.user) : '/');
 });
 
+/* Join a live quiz hosted by the teacher: the code on the classroom screen → Quiz Studio, with the student's identity. */
+router.get('/live', requireLogin, (req, res) => {
+  const code = String(req.query.code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  if (!code) { flash(req, 'error', 'Type the code shown on your teacher\'s screen.'); return res.redirect('/dashboard'); }
+  if (!pathLib.quizEnabled()) return res.status(404).render('error', { title: 'Not available', message: 'Live quizzes are not set up on this Academy yet.' });
+  if (req.user.role !== 'learner') return res.redirect(`${pathLib.QUIZ_URL}/live/${code}`);
+  q.logEvent.run(req.user.id, null, null, 'live_joined', JSON.stringify({ code }));
+  res.redirect(pathLib.liveJoinUrl({ user: req.user, code, baseUrl: baseUrl(req) }));
+});
+router.get('/live/:code', requireLogin, (req, res) => res.redirect('/live?code=' + encodeURIComponent(req.params.code)));
+
 router.get('/dashboard', requireLogin, (req, res) => {
   const enrollments = db.prepare(`SELECT e.*, c.title, c.slug, c.description FROM enrollments e JOIN courses c ON c.id = e.course_id
                                   WHERE e.user_id = ? ORDER BY e.enrolled_at DESC`).all(req.user.id);
@@ -121,7 +132,7 @@ router.post('/api/quiz-results', express.json({ verify: (req, res, buf) => { req
   if (!pathLib.quizEnabled()) return res.status(404).json({ error: 'Quiz integration not configured' });
   try {
     const r = pathLib.applyQuizResult(req.rawBody || '', req.headers);
-    plugins.emit('step:completed', { userId: r.userId, courseId: r.step.course_id, stepId: r.step.id, type: 'quiz' });
+    if (r.step) plugins.emit('step:completed', { userId: r.userId, courseId: r.step.course_id, stepId: r.step.id, type: 'quiz' });
     res.json({ ok: true });
   } catch (e) { console.warn('[quiz-results]', e.message); res.status(400).json({ error: e.message }); }
 });

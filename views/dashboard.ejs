@@ -15,6 +15,13 @@
   </div>
 <% }) %>
 </div>
+<div class="card live-join" style="margin-top:18px">
+  <form method="get" action="/live" class="row" style="align-items:center;gap:12px;flex-wrap:wrap">
+    <div style="flex:1;min-width:220px"><h3 style="margin:0">Join a live quiz</h3><p class="muted small" style="margin:2px 0 0">Your teacher shows a code on the big screen. Type it here and you're in — no name to type.</p></div>
+    <input name="code" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABC123" style="width:150px;text-transform:uppercase;letter-spacing:.2em;font-weight:700;text-align:center" required>
+    <button class="btn small" type="submit">Join</button>
+  </form>
+</div>
 <% if (!mine.length) { %><p class="muted"><%= catalog.length ? "You're not enrolled in any course yet — pick one below." : "No courses have been assigned to you yet. Your teacher or AI Ninjas will add you to a course; it will appear here." %></p><% } %>
 <% if (catalog.length) { %>
 <h2>Open courses</h2>

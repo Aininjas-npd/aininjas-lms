@@ -119,3 +119,7 @@ When adding a **Practice** step you can now upload the `.ipynb` itself instead o
 
 On *Build learning path*, drag any step by its ☰ handle and drop it where it belongs — the order saves immediately ("Order saved"). You can also type a position number in the box next to a step, use ↑/↓, or choose where a new step goes ("At the end", "At the start", "After 2. …") when adding it.
 
+
+## Live quizzes
+
+Teachers can host a quiz live from Quiz Studio (Live in its menu bar). Students join from the **Join a live quiz** box on their dashboard (`/live?code=…`), which sends them to Quiz Studio with a signed launch token, so their name and class come from Accounts. When the teacher ends the session the result posts back to `/api/quiz-results` without a `step_id`; the Academy credits the quiz step (matching `quiz_id`) of a course the student is enrolled in, or just logs a `quiz_completed` event if there is none.

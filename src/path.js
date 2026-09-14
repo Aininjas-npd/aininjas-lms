@@ -145,6 +145,16 @@ function launchUrl({ user, step, course, baseUrl }) {
   }, LAUNCH_SECRET);
   return `${QUIZ_URL}/launch/${step.config.quiz_id}?launch=${encodeURIComponent(jwt)}`;
 }
+/** Signed link into a live (teacher-hosted) session: identity comes with the student, results post back like any quiz. */
+function liveJoinUrl({ user, code, baseUrl }) {
+  const now = Math.floor(Date.now() / 1000);
+  const jwt = ssoLib.sign({
+    iss: 'aininjas-academy', aud: 'quiz-studio', sub: String(user.id), jti: crypto.randomBytes(8).toString('hex'), iat: now, exp: now + 6 * 3600,
+    email: user.email, name: user.name, school: user.organization || null, school_slug: user.school_slug || null, class_name: user.class_name || null,
+    source: 'Academy', callback_url: `${baseUrl}/api/quiz-results`, return_url: `${baseUrl}/dashboard`,
+  }, LAUNCH_SECRET);
+  return `${QUIZ_URL}/live/${encodeURIComponent(code)}?launch=${encodeURIComponent(jwt)}`;
+}
 /** Verify + apply a result posted by Quiz Studio. Returns the progress row or throws. */
 function applyQuizResult(rawBody, headers) {
   const h = String(headers['x-ain-signature'] || '');
@@ -155,7 +165,13 @@ function applyQuizResult(rawBody, headers) {
   if (expect.length !== m[2].length || !crypto.timingSafeEqual(Buffer.from(expect), Buffer.from(m[2]))) throw new Error('Bad signature');
   const ev = JSON.parse(rawBody);
   const userId = +ev.student_ref;
-  const step = db.prepare('SELECT * FROM path_steps WHERE id=?').get(+ev.step_id);
+  let step = ev.step_id ? db.prepare('SELECT * FROM path_steps WHERE id=?').get(+ev.step_id) : null;
+  // a live (teacher-hosted) session carries no step: credit the quiz step of a course the student is enrolled in
+  if (!step && ev.quiz_id && userId) {
+    step = db.prepare(`SELECT ps.* FROM path_steps ps JOIN enrollments e ON e.course_id=ps.course_id AND e.user_id=? AND e.status='active'
+      WHERE ps.type='quiz' AND json_extract(ps.config, '$.quiz_id')=? ORDER BY e.enrolled_at LIMIT 1`).get(userId, +ev.quiz_id);
+    if (!step) { q.logEvent.run(userId, null, null, 'quiz_completed', JSON.stringify({ live: true, quiz_id: ev.quiz_id, points: ev.points, max_points: ev.max_points, belt: ev.belt })); return { userId, step: null }; }
+  }
   if (!userId || !step) throw new Error('Unknown student or step');
   // keep the best score if they retry
   const cur = db.prepare('SELECT * FROM step_progress WHERE user_id=? AND step_id=?').get(userId, step.id);
@@ -184,4 +200,4 @@ function classGrid(courseId) {
   return { steps, rows: learners.map(u => ({ user: u, summary: pathSummary(u.id, courseId) })) };
 }
 
-module.exports = { stepsFor, hasCustomPath, pathSummary, addStep, materialise, moveStep, reorder, moveTo, deleteStep, clearPath, updateStep, listQuizzes, launchUrl, applyQuizResult, markStarted, markDone, classGrid, quizEnabled, QUIZ_URL, TYPE_LABEL };
+module.exports = { stepsFor, hasCustomPath, pathSummary, addStep, materialise, moveStep, reorder, moveTo, deleteStep, clearPath, updateStep, listQuizzes, launchUrl, liveJoinUrl, applyQuizResult, markStarted, markDone, classGrid, quizEnabled, QUIZ_URL, TYPE_LABEL };
