@@ -26,7 +26,9 @@ router.get('/', (req, res) => {
   const recent = db.prepare(`SELECT e.*, u.name AS user_name, c.title AS course_title, s.title AS sco_title FROM events e
                              LEFT JOIN users u ON u.id=e.user_id LEFT JOIN courses c ON c.id=e.course_id LEFT JOIN scos s ON s.id=e.sco_id
                              ORDER BY e.id DESC LIMIT 25`).all();
-  res.render('admin/index', { title: 'Admin', stats, recent, widgets: plugins.widgets('adminDashboard'), plugins: plugins.list() });
+  const courses = q.courses.all().map(c => ({ ...c, steps: pathLib.stepsFor(c.id).length, custom: pathLib.hasCustomPath(c.id),
+    enrolled: db.prepare(`SELECT COUNT(*) n FROM enrollments WHERE course_id=? AND status='active'`).get(c.id).n }));
+  res.render('admin/index', { title: 'Admin', stats, recent, courses, widgets: plugins.widgets('adminDashboard'), plugins: plugins.list() });
 });
 
 // ---- Courses ----
