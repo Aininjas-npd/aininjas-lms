@@ -115,3 +115,7 @@ On a course's **Build learning path** page, **Lock the sequence** makes students
 
 When adding a **Practice** step you can now upload the `.ipynb` itself instead of sharing a Colab link. The notebook is stored in the Academy (`data/notebooks/`) and students get **⬇ Download notebook** and **Open Colab** buttons with the three-step hint (download → in Colab, *File → Upload notebook* → run, then mark done). Nothing runs on your Google account, so there is no "authored by …" warning and no session limit tied to you. The Colab-link option still exists for notebooks you'd rather keep in your Drive. Files live on the `/data` volume with everything else.
 
+## Reordering a path
+
+On *Build learning path*, drag any step by its ☰ handle and drop it where it belongs — the order saves immediately ("Order saved"). You can also type a position number in the box next to a step, use ↑/↓, or choose where a new step goes ("At the end", "At the start", "After 2. …") when adding it.
+

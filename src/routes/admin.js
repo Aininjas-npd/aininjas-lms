@@ -143,13 +143,24 @@ router.post('/courses/:id/path/steps', nbUpload.single('notebook'), (req, res) =
     }
     else if (type === 'note') { if (!b.instructions) throw new Error('Write the note text'); pathLib.addStep(course.id, { type, title: b.title || 'Read this first', config: { html: b.instructions } }); }
     else throw new Error('Unknown step type');
+    if (b.after !== undefined && b.after !== '' && b.after !== 'end') {   // "Insert after step N" (0 = at the start)
+      const last = db.prepare('SELECT id FROM path_steps WHERE course_id=? ORDER BY sort_order DESC, id DESC LIMIT 1').get(course.id);
+      if (last) pathLib.moveTo(course.id, last.id, (+b.after || 0) + 1);
+    }
     flash(req, 'success', 'Step added.');
   } catch (e) { flash(req, 'error', e.message); }
   res.redirect(`/admin/courses/${course.id}/path`);
 });
+// Drag-and-drop order from the path page (JSON: { ids: [...] }) — saves silently, no reload
+router.post('/courses/:id/path/reorder', express.json(), (req, res) => {
+  const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids : [];
+  if (!ids.length) return res.status(400).json({ error: 'No order given' });
+  res.json({ ok: true, order: pathLib.reorder(+req.params.id, ids) });
+});
 router.post('/courses/:id/path/steps/:stepId/:action', (req, res) => {
   const { stepId, action } = req.params;
   if (action === 'up' || action === 'down') pathLib.moveStep(+stepId, action);
+  else if (action === 'moveto') pathLib.moveTo(+req.params.id, +stepId, +req.body.position || 1);
   else if (action === 'delete') pathLib.deleteStep(+stepId);
   else if (action === 'rename') pathLib.updateStep(+stepId, { title: String(req.body.title || '').trim() });
   res.redirect(`/admin/courses/${req.params.id}/path`);

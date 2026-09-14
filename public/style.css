@@ -42,3 +42,10 @@ a.card.tile{display:block;color:inherit;text-decoration:none}a.card.tile:hover{b
 .path .step.locked{opacity:.55;background:var(--paper)}.path .step.locked .num{background:var(--paper-2);color:var(--muted);font-size:13px}
 
 .player-bar .btn.locked{opacity:.45;cursor:not-allowed;background:#453936;border-color:#453936;color:#C6B6B2}
+
+/* path builder: drag-and-drop */
+.path.compact .step[draggable="true"]{cursor:grab}.path.compact .step.dragging{opacity:.4;cursor:grabbing}
+.path.compact .handle{align-self:center;color:var(--muted);font-size:18px;padding:0 6px;cursor:grab;user-select:none}
+.path.compact .step{grid-template-columns:28px auto 1fr auto}.path.compact .step:not([draggable]){grid-template-columns:28px 1fr auto}
+.path.compact .act .posbox{width:52px;min-width:0;padding:5px 4px;font-size:13px;text-align:center}
+.ordertoast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink-deep);color:#fff;padding:9px 16px;border-radius:var(--r);font-size:13.5px;opacity:0;transition:.18s;pointer-events:none;z-index:50}.ordertoast.show{opacity:1;transform:translateX(-50%)}.ordertoast.err{background:var(--bad)}

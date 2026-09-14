@@ -13,10 +13,12 @@
 <div class="card">
   <h3>Steps</h3>
   <% if (!steps.length) { %><p class="muted">No steps yet.</p><% } %>
-  <ol class="path compact">
+  <% if (custom && steps.length > 1) { %><p class="hint" style="margin-top:0">Drag steps by the ☰ handle to reorder (saves automatically), or type a position number. Students always see this order.</p><% } %>
+  <ol class="path compact" id="steplist" data-reorder-url="/admin/courses/<%= course.id %>/path/reorder">
   <% steps.forEach((s, i) => { %>
-    <li class="step <%= s.type %>">
+    <li class="step <%= s.type %>" data-id="<%= s.id %>" <%- s.custom ? 'draggable="true"' : '' %>>
       <div class="num"><%= i + 1 %></div>
+      <% if (s.custom) { %><div class="handle" title="Drag to reorder">☰</div><% } %>
       <div class="body">
         <div class="kind"><%= s.kind %></div>
         <% if (s.custom) { %>
@@ -30,6 +32,7 @@
       </div>
       <% if (s.custom) { %>
       <div class="act actions">
+        <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/moveto" class="inline" title="Move to position"><input type="number" name="position" value="<%= i + 1 %>" min="1" max="<%= steps.length %>" class="posbox" onchange="this.form.submit()"></form>
         <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/up" class="inline"><button class="iconbtn" title="Move up" <%= i === 0 ? 'disabled' : '' %>>↑</button></form>
         <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/down" class="inline"><button class="iconbtn" title="Move down" <%= i === steps.length - 1 ? 'disabled' : '' %>>↓</button></form>
         <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/delete" class="inline" onsubmit="return confirm('Remove this step?')"><button class="iconbtn" title="Remove">✕</button></form>
@@ -51,6 +54,8 @@
         <option value="note">Read — a short note / instructions</option>
       </select></div>
     <div class="field"><label>Title <span class="muted">(optional — shown to students)</span></label><input type="text" name="title" placeholder="e.g. Level 1 · Loops in Python"></div>
+    <div class="field"><label>Position</label>
+      <select name="after"><option value="end">At the end</option><option value="0">At the start</option><% steps.forEach((s, i) => { %><option value="<%= i + 1 %>">After <%= i + 1 %>. <%= s.title %></option><% }) %></select></div>
     <div data-for="sco" class="field"><label>Lesson</label><% if (!scos.length) { %><p class="muted small">No lessons yet — upload a SCORM package in the box on the right; its lessons are added to the path automatically.</p><% } else { %><select name="sco_id"><% scos.forEach(s => { %><option value="<%= s.id %>"><%= s.title %><%= s.package_title ? ' (' + s.package_title + ')' : '' %></option><% }) %></select><div class="hint">Use this to place a lesson a second time or re-add one you removed.</div><% } %></div>
     <div data-for="colab" hidden>
       <div class="field"><label>Notebook file (.ipynb) <span class="muted">— recommended</span></label><input type="file" name="notebook" accept=".ipynb,application/json"><div class="hint">Students download it from the Academy and upload it to <b>their own</b> Google Colab (File → Upload notebook). Nothing runs on your account, and they don't see the "not authored by Google" warning tied to your name.</div></div>
@@ -86,4 +91,27 @@
   </div>
 </div>
 </div>
+<script>
+(function () {
+  var list = document.getElementById('steplist'); if (!list) return;
+  var dragging = null;
+  list.querySelectorAll('li[draggable="true"]').forEach(function (li) {
+    li.addEventListener('dragstart', function (e) { dragging = li; li.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', li.dataset.id); } catch (_) {} });
+    li.addEventListener('dragend', function () { li.classList.remove('dragging'); dragging = null; list.querySelectorAll('.over').forEach(function (x) { x.classList.remove('over'); }); });
+    li.addEventListener('dragover', function (e) { if (!dragging || dragging === li) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+      var r = li.getBoundingClientRect(); var before = (e.clientY - r.top) < r.height / 2;
+      list.insertBefore(dragging, before ? li : li.nextSibling); });
+    li.addEventListener('drop', function (e) { e.preventDefault(); save(); });
+  });
+  list.addEventListener('drop', function (e) { e.preventDefault(); save(); });
+  function save() {
+    var ids = Array.prototype.map.call(list.querySelectorAll('li[data-id]'), function (li) { return +li.dataset.id; });
+    list.querySelectorAll('li').forEach(function (li, i) { var n = li.querySelector('.num'); if (n) n.textContent = i + 1; var pb = li.querySelector('.posbox'); if (pb) pb.value = i + 1; });
+    fetch(list.dataset.reorderUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids }), credentials: 'same-origin' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); toast('Order saved'); })
+      .catch(function () { toast('Could not save the order — reload and try again', true); });
+  }
+  function toast(msg, err) { var t = document.getElementById('ordertoast'); if (!t) { t = document.createElement('div'); t.id = 'ordertoast'; t.className = 'ordertoast'; document.body.appendChild(t); } t.textContent = msg; t.classList.toggle('err', !!err); t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove('show'); }, 1800); }
+})();
+</script>
 <%- include('../partials/footer') %>

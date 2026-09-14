@@ -104,6 +104,22 @@ function moveStep(stepId, dir) {
   const upd = db.prepare('UPDATE path_steps SET sort_order=? WHERE id=?');
   db.transaction(() => list.forEach((id, k) => upd.run(k, id)))();
 }
+/** Save a full new order: `ids` is every custom step id of the course in the wanted order. */
+function reorder(courseId, ids) {
+  const cur = db.prepare('SELECT id FROM path_steps WHERE course_id=? ORDER BY sort_order, id').all(courseId).map(r => r.id);
+  const wanted = ids.map(Number).filter(id => cur.includes(id));
+  const finalOrder = [...wanted, ...cur.filter(id => !wanted.includes(id))];   // anything missing keeps its place at the end
+  const upd = db.prepare('UPDATE path_steps SET sort_order=? WHERE id=?');
+  db.transaction(() => finalOrder.forEach((id, k) => upd.run(k, id)))();
+  return finalOrder;
+}
+/** Move one step to a 1-based position. */
+function moveTo(courseId, stepId, position) {
+  const cur = db.prepare('SELECT id FROM path_steps WHERE course_id=? ORDER BY sort_order, id').all(courseId).map(r => r.id);
+  const i = cur.indexOf(+stepId); if (i < 0) return;
+  cur.splice(i, 1); cur.splice(Math.max(0, Math.min(cur.length, position - 1)), 0, +stepId);
+  reorder(courseId, cur);
+}
 function deleteStep(stepId) { db.prepare('DELETE FROM path_steps WHERE id=?').run(stepId); }
 function clearPath(courseId) { db.prepare('DELETE FROM path_steps WHERE course_id=?').run(courseId); }
 function updateStep(stepId, { title, config }) {
@@ -168,4 +184,4 @@ function classGrid(courseId) {
   return { steps, rows: learners.map(u => ({ user: u, summary: pathSummary(u.id, courseId) })) };
 }
 
-module.exports = { stepsFor, hasCustomPath, pathSummary, addStep, materialise, moveStep, deleteStep, clearPath, updateStep, listQuizzes, launchUrl, applyQuizResult, markStarted, markDone, classGrid, quizEnabled, QUIZ_URL, TYPE_LABEL };
+module.exports = { stepsFor, hasCustomPath, pathSummary, addStep, materialise, moveStep, reorder, moveTo, deleteStep, clearPath, updateStep, listQuizzes, launchUrl, applyQuizResult, markStarted, markDone, classGrid, quizEnabled, QUIZ_URL, TYPE_LABEL };
