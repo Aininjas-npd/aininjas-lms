@@ -25,7 +25,7 @@
         <p class="small muted meta">
           <% if (s.type === 'sco') { %><%= s.missing ? 'Lesson no longer exists — remove this step' : 'Lesson' + (s.pkg ? ' · ' + s.pkg : '') %><% } %>
           <% if (s.type === 'quiz') { %>Quiz Studio #<%= s.config.quiz_id %> <%= s.config.quiz_title ? '· ' + s.config.quiz_title : '' %><% } %>
-          <% if (s.type === 'colab') { %><a href="<%= s.config.url %>" target="_blank" rel="noopener"><%= s.config.url %></a><% } %>
+          <% if (s.type === 'colab') { %><% if (s.config.file) { %>📓 <%= s.config.filename %> <span class="muted">(students download &amp; upload to their Colab)</span><% } else { %><a href="<%= s.config.url %>" target="_blank" rel="noopener"><%= s.config.url %></a><% } %><% } %>
         </p>
       </div>
       <% if (s.custom) { %>
@@ -41,7 +41,7 @@
 </div>
 
 <div>
-  <form class="card" method="post" action="/admin/courses/<%= course.id %>/path/steps" id="addstep">
+  <form class="card" method="post" action="/admin/courses/<%= course.id %>/path/steps" id="addstep" enctype="multipart/form-data">
     <h3>Add a step</h3>
     <div class="field"><label>Type</label>
       <select name="type" id="stype" onchange="document.querySelectorAll('#addstep [data-for]').forEach(d=>d.hidden=d.dataset.for!==this.value)">
@@ -53,7 +53,8 @@
     <div class="field"><label>Title <span class="muted">(optional — shown to students)</span></label><input type="text" name="title" placeholder="e.g. Level 1 · Loops in Python"></div>
     <div data-for="sco" class="field"><label>Lesson</label><% if (!scos.length) { %><p class="muted small">No lessons yet — upload a SCORM package in the box on the right; its lessons are added to the path automatically.</p><% } else { %><select name="sco_id"><% scos.forEach(s => { %><option value="<%= s.id %>"><%= s.title %><%= s.package_title ? ' (' + s.package_title + ')' : '' %></option><% }) %></select><div class="hint">Use this to place a lesson a second time or re-add one you removed.</div><% } %></div>
     <div data-for="colab" hidden>
-      <div class="field"><label>Colab notebook link</label><input type="url" name="url" placeholder="https://colab.research.google.com/drive/…"><div class="hint">Share the notebook as "Anyone with the link can view"; students press <i>File → Save a copy in Drive</i>.</div></div>
+      <div class="field"><label>Notebook file (.ipynb) <span class="muted">— recommended</span></label><input type="file" name="notebook" accept=".ipynb,application/json"><div class="hint">Students download it from the Academy and upload it to <b>their own</b> Google Colab (File → Upload notebook). Nothing runs on your account, and they don't see the "not authored by Google" warning tied to your name.</div></div>
+      <div class="field"><label>…or a Colab link <span class="muted">(only if you'd rather share from your Drive)</span></label><input type="url" name="url" placeholder="https://colab.research.google.com/drive/…"></div>
       <div class="field"><label>Instructions for students</label><textarea name="instructions" rows="3" placeholder="Complete exercises 1–4, then come back and mark this done."></textarea></div>
     </div>
     <div data-for="quiz" hidden class="field"><label>Quiz</label>

@@ -117,7 +117,10 @@ router.get('/courses/:id/path', async (req, res) => {
   res.render('admin/path', { title: 'Learning path · ' + course.title, course, steps: pathLib.stepsFor(course.id), custom: pathLib.hasCustomPath(course.id),
     scos: q.scosForCourse.all(course.id), packages: packagesFor(course.id), quizzes, quizError, quizEnabled: pathLib.quizEnabled(), quizUrl: pathLib.QUIZ_URL });
 });
-router.post('/courses/:id/path/steps', (req, res) => {
+const notebookDir = path.join(DATA_DIR, 'notebooks');
+fs.mkdirSync(notebookDir, { recursive: true });
+const nbUpload = multer({ dest: notebookDir, limits: { fileSize: 25 * 1024 * 1024 } });
+router.post('/courses/:id/path/steps', nbUpload.single('notebook'), (req, res) => {
   const course = q.courseById.get(req.params.id);
   if (!course) return res.status(404).render('error', { title: 'Not found', message: 'Course not found.' });
   const b = req.body, type = String(b.type || '');
@@ -125,7 +128,19 @@ router.post('/courses/:id/path/steps', (req, res) => {
     pathLib.materialise(course.id);
     if (type === 'sco') { const sco = q.scoById.get(+b.sco_id); if (!sco || sco.course_id !== course.id) throw new Error('Pick a lesson'); pathLib.addStep(course.id, { type, title: b.title || sco.title, config: { sco_id: sco.id } }); }
     else if (type === 'quiz') { if (!b.quiz_id) throw new Error('Pick a quiz'); const [qid, qtitle] = String(b.quiz_id).split('|'); pathLib.addStep(course.id, { type, title: b.title || qtitle || 'Quiz', config: { quiz_id: +qid, quiz_title: qtitle || '' } }); }
-    else if (type === 'colab') { if (!/^https?:\/\//i.test(b.url || '')) throw new Error('Paste the Colab notebook link (https://colab.research.google.com/…)'); pathLib.addStep(course.id, { type, title: b.title || 'Hands-on: Python in Colab', config: { url: b.url.trim(), instructions: b.instructions || '' } }); }
+    else if (type === 'colab') {
+      // Two ways to hand out a notebook: upload the .ipynb (students download it and upload to their own Colab — no link to your
+      // Drive, no "authored by …" warning, no sessions on your account), or a shared Colab link (the old way).
+      if (req.file) {
+        if (!/\.ipynb$/i.test(req.file.originalname || '')) { fs.unlinkSync(req.file.path); throw new Error('Upload a Jupyter/Colab notebook file (.ipynb)'); }
+        try { JSON.parse(fs.readFileSync(req.file.path, 'utf8')); } catch { fs.unlinkSync(req.file.path); throw new Error('That file is not a valid notebook (.ipynb is JSON)'); }
+        const safe = req.file.originalname.replace(/[^\w.\- ]+/g, '_');
+        pathLib.addStep(course.id, { type, title: b.title || safe.replace(/\.ipynb$/i, ''), config: { file: path.basename(req.file.path), filename: safe, instructions: b.instructions || '' } });
+      } else {
+        if (!/^https?:\/\//i.test(b.url || '')) throw new Error('Upload the notebook file (.ipynb) or paste a Colab link');
+        pathLib.addStep(course.id, { type, title: b.title || 'Hands-on: Python in Colab', config: { url: b.url.trim(), instructions: b.instructions || '' } });
+      }
+    }
     else if (type === 'note') { if (!b.instructions) throw new Error('Write the note text'); pathLib.addStep(course.id, { type, title: b.title || 'Read this first', config: { html: b.instructions } }); }
     else throw new Error('Unknown step type');
     flash(req, 'success', 'Step added.');

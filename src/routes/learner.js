@@ -87,10 +87,21 @@ router.get('/courses/:id/steps/:stepId/go', requireLogin, (req, res) => {
   if (step.type === 'colab') {
     pathLib.markStarted(req.user.id, step.id);
     q.logEvent.run(req.user.id, course.id, null, 'colab_opened', JSON.stringify({ step_id: step.id }));
+    if (step.config.file) return res.redirect(`/courses/${course.id}/steps/${step.id}/notebook`);   // hand them the file
     return res.redirect(step.config.url);
   }
   if (step.type === 'note') { pathLib.markDone(req.user.id, step.id); return res.redirect(`/courses/${course.id}`); }
   res.redirect(`/courses/${course.id}`);
+});
+// Practice step with an uploaded notebook: download it (students then upload it to their own Colab)
+router.get('/courses/:id/steps/:stepId/notebook', requireLogin, (req, res) => {
+  const ctx = stepFor(req, res); if (!ctx) return;
+  const { step } = ctx;
+  if (step.type !== 'colab' || !step.config.file) return res.status(404).render('error', { title: 'Not found', message: 'This step has no notebook file.' });
+  const file = path.join(DATA_DIR, 'notebooks', path.basename(step.config.file));
+  if (!require('fs').existsSync(file)) return res.status(404).render('error', { title: 'Not found', message: 'The notebook file is missing — tell your teacher.' });
+  pathLib.markStarted(req.user.id, step.id);
+  res.download(file, step.config.filename || 'notebook.ipynb');
 });
 // Practice step: student marks it done (optionally with their notebook share link)
 router.post('/courses/:id/steps/:stepId/done', requireLogin, (req, res) => {

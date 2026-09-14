@@ -111,3 +111,7 @@ The Academy has four roles: **Administrator** (AI Ninjas — everything), **Scho
 
 On a course's **Build learning path** page, **Lock the sequence** makes students complete each step before the next one opens: later steps show a 🔒 and "Locked — finish "…" first", and opening one directly (even by URL, including a SCORM lesson's player link) sends them back to the course page with the same message. A lesson counts as done when SCORM reports completed/passed; a Colab step when the student marks it done; a quiz when Quiz Studio posts the score. Unlock at any time — nothing is lost. Admins are never locked, so you can review any step.
 
+## Practice steps: hand out the notebook file
+
+When adding a **Practice** step you can now upload the `.ipynb` itself instead of sharing a Colab link. The notebook is stored in the Academy (`data/notebooks/`) and students get **⬇ Download notebook** and **Open Colab** buttons with the three-step hint (download → in Colab, *File → Upload notebook* → run, then mark done). Nothing runs on your Google account, so there is no "authored by …" warning and no session limit tied to you. The Colab-link option still exists for notebooks you'd rather keep in your Drive. Files live on the `/data` volume with everything else.
+

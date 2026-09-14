@@ -34,15 +34,21 @@
         <a class="btn small <%= done ? 'ghost' : '' %>" href="/courses/<%= course.id %>/steps/<%= s.id %>/go"><%= done ? 'Review' : s.status === 'started' ? 'Resume' : 'Start' %></a>
       <% } else if (s.type === 'quiz') { %>
         <% if (quizEnabled) { %><a class="btn small <%= done ? 'ghost' : '' %>" href="/courses/<%= course.id %>/steps/<%= s.id %>/go" target="_blank" rel="noopener"><%= done ? 'Try again' : 'Take the quiz' %> ↗</a><% } else { %><span class="badge">quiz offline</span><% } %>
+      <% } else if (s.type === 'colab' && s.config.file) { %>
+        <a class="btn small <%= done ? 'ghost' : '' %>" href="/courses/<%= course.id %>/steps/<%= s.id %>/notebook">⬇ Download notebook</a>
+        <a class="btn small ghost" href="https://colab.research.google.com/#create=true" target="_blank" rel="noopener" title="Then File → Upload notebook">Open Colab ↗</a>
+        <span class="small muted" style="text-align:right">1 · Download &nbsp; 2 · In Colab: <b>File → Upload notebook</b> &nbsp; 3 · Run it, then mark done</span>
       <% } else if (s.type === 'colab') { %>
         <a class="btn small <%= done ? 'ghost' : '' %>" href="/courses/<%= course.id %>/steps/<%= s.id %>/go" target="_blank" rel="noopener">Open in Colab ↗</a>
+      <% } %>
+      <% if (s.type === 'colab' && !s.locked) { %>
         <% if (!done) { %>
         <form method="post" action="/courses/<%= course.id %>/steps/<%= s.id %>/done" class="donebox">
           <input type="url" name="notebook_url" placeholder="Paste your notebook's share link (optional)">
           <button class="btn small ok" type="submit">Mark as done</button>
         </form>
         <% } %>
-      <% } else if (s.type === 'note') { %>
+      <% } else if (s.type === 'note' && !s.locked) { %>
         <% if (!done) { %><form method="post" action="/courses/<%= course.id %>/steps/<%= s.id %>/done"><button class="btn small ghost" type="submit">Got it</button></form><% } %>
       <% } %>
     </div>
