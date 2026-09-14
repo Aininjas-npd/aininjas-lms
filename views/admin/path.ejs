@@ -32,7 +32,7 @@
       </div>
       <% if (s.custom) { %>
       <div class="act actions">
-        <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/moveto" class="inline" title="Move to position"><input type="number" name="position" value="<%= i + 1 %>" min="1" max="<%= steps.length %>" class="posbox" onchange="this.form.submit()"></form>
+        <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/moveto" class="inline posform" title="Type a position and press Enter (or click away) to move this step"><span>POS</span><input type="number" name="position" value="<%= i + 1 %>" min="1" max="<%= steps.length %>" class="posbox" aria-label="Position of this step" onchange="this.form.submit()"></form>
         <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/up" class="inline"><button class="iconbtn" title="Move up" <%= i === 0 ? 'disabled' : '' %>>↑</button></form>
         <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/down" class="inline"><button class="iconbtn" title="Move down" <%= i === steps.length - 1 ? 'disabled' : '' %>>↓</button></form>
         <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/delete" class="inline" onsubmit="return confirm('Remove this step?')"><button class="iconbtn" title="Remove">✕</button></form>
