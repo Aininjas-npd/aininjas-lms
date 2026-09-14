@@ -150,10 +150,16 @@ router.get('/courses/:id/play/:scoId', requireLogin, (req, res) => {
   q.logEvent.run(req.user.id, course.id, sco.id, 'launch', null);
   plugins.emit('sco:launch', { userId: req.user.id, courseId: course.id, scoId: sco.id });
 
-  const scos = q.scosForCourse.all(course.id);
-  const idx = scos.findIndex(s => s.id === sco.id);
+  // Prev / Next follow the learning path (not just the lesson list), so a Colab or quiz step is never skipped.
+  // "Next" is only enabled once this lesson is done (or the course isn't locked / the viewer is an admin).
+  const lp = pathLib.pathSummary(req.user.id, course.id);
+  const pi = lp.steps.findIndex(s => s.type === 'sco' && String(s.config.sco_id) === String(sco.id));
+  const cur = pi >= 0 ? lp.steps[pi] : null;
+  const nav = st => st ? { title: st.title, kind: st.kind, href: `/courses/${course.id}/steps/${st.id}/go` } : null;
+  const nextStep = pi >= 0 ? lp.steps[pi + 1] : null, prevStep = pi >= 0 ? lp.steps[pi - 1] : null;
+  const nextOpen = !course.sequential || req.user.role === 'admin' || !!(cur && cur.status === 'done');
   res.render('player', {
-    title: sco.title, course, sco, scos, prev: scos[idx - 1] || null, next: scos[idx + 1] || null,
+    title: sco.title, course, sco, prev: nav(prevStep), next: nav(nextStep), nextOpen, stepId: cur ? cur.id : null,
     launchUrl: `/content/${course.slug}/${sco.launch_href}`,
     config: { scoId: sco.id, commitUrl: `/api/runtime/${sco.id}/commit`, masteryScore: sco.mastery_score, launchData: sco.data_from_lms || '', initialData },
     layout: false,

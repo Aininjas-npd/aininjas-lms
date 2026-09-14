@@ -9,8 +9,8 @@
   <div class="row gap"><a href="/courses/<%= course.id %>" class="btn small ghost" id="exit">✕ Exit</a> <strong><%= course.title %></strong> <span class="muted">› <%= sco.title %></span></div>
   <div class="row gap">
     <span class="status" id="status">Status: <%= config.initialData.lesson_status %></span>
-    <% if (prev) { %><a class="btn small ghost" href="/courses/<%= course.id %>/play/<%= prev.id %>">‹ Prev</a><% } %>
-    <% if (next) { %><a class="btn small" href="/courses/<%= course.id %>/play/<%= next.id %>">Next ›</a><% } %>
+    <% if (prev) { %><a class="btn small ghost" href="<%= prev.href %>" title="<%= prev.kind %>: <%= prev.title %>">‹ Prev</a><% } %>
+    <% if (next) { %><a class="btn small <%= nextOpen ? '' : 'locked' %>" id="nextBtn" href="<%= next.href %>" title="<%= nextOpen ? next.kind + ': ' + next.title : 'Finish this lesson to unlock: ' + next.title %>" <%- nextOpen ? '' : 'aria-disabled="true" tabindex="-1"' %>>Next<%= nextOpen ? '' : ' 🔒' %> ›</a><% } %>
   </div>
 </div>
 <div class="stage">
@@ -33,7 +33,13 @@
     document.getElementById('cover').remove();
     f.focus();
   });
-  window.onScormProgress = function (r) { document.getElementById('status').textContent = 'Status: ' + r.status + ' · course ' + r.percent + '%'; };
+  window.onScormProgress = function (r) {
+    document.getElementById('status').textContent = 'Status: ' + r.status + ' · course ' + r.percent + '%';
+    var n = document.getElementById('nextBtn');   // unlock Next the moment the lesson reports completed / passed
+    if (n && n.classList.contains('locked') && /^(completed|passed)$/.test(String(r.status || ''))) { n.classList.remove('locked'); n.removeAttribute('aria-disabled'); n.removeAttribute('tabindex'); n.textContent = 'Next ›'; n.title = n.title.replace('Finish this lesson to unlock: ', 'Next: '); }
+  };
+  var nb = document.getElementById('nextBtn');
+  if (nb) nb.addEventListener('click', function (e) { if (nb.classList.contains('locked')) { e.preventDefault(); nb.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'translateX(0)' }], { duration: 240 }); } });
   window.onScormFinish = function () { /* course called LMSFinish – stay on page; learner uses Next/Exit */ };
 </script>
 </body></html>

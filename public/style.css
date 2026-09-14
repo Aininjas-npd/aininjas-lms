@@ -40,3 +40,5 @@ a.card.tile{display:block;color:inherit;text-decoration:none}a.card.tile:hover{b
 
 /* locked sequence */
 .path .step.locked{opacity:.55;background:var(--paper)}.path .step.locked .num{background:var(--paper-2);color:var(--muted);font-size:13px}
+
+.player-bar .btn.locked{opacity:.45;cursor:not-allowed;background:#453936;border-color:#453936;color:#C6B6B2}
