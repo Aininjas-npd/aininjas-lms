@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title><%= sco.title %> · <%= course.title %></title><link rel="icon" type="image/png" href="/icon.png"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=JetBrains+Mono:wght@400&display=swap"><link rel="stylesheet" href="/style.css">
+<title><%= sco.title %> · <%= course.title %></title><link rel="icon" type="image/png" href="/icon.png"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=JetBrains+Mono:wght@400&display=swap"><link rel="stylesheet" href="/aininjas-app.css?v=20260913b"><link rel="stylesheet" href="/style.css?v=20260913b">
 <script>window.SCORM_PLAYER_CONFIG = <%- JSON.stringify(config) %>;</script>
 <script src="/scorm-api.js"></script>
 </head>
@@ -13,8 +13,26 @@
     <% if (next) { %><a class="btn small" href="/courses/<%= course.id %>/play/<%= next.id %>">Next ›</a><% } %>
   </div>
 </div>
-<iframe id="sco" src="<%= launchUrl %>" allow="autoplay; fullscreen" allowfullscreen></iframe>
+<div class="stage">
+  <!-- The lesson loads only after a click: browsers allow sound/autoplay once the person has interacted, so Storyline's
+       timeline runs instead of sitting paused with the slide text faded (Opera and some ad-blockers block autoplay). -->
+  <div class="cover" id="cover">
+    <div class="cover-box">
+      <p class="eyebrow"><%= course.title %></p>
+      <h1><%= sco.title %></h1>
+      <p class="muted"><%= config.initialData.entry === 'resume' ? 'You have been here before — the lesson picks up where you left off.' : 'The lesson has sound. Make sure your volume is on.' %></p>
+      <button class="btn" type="button" id="startBtn" autofocus>▶ <%= config.initialData.entry === 'resume' ? 'Resume lesson' : 'Start lesson' %></button>
+    </div>
+  </div>
+  <iframe id="sco" data-src="<%= launchUrl %>" allow="autoplay; fullscreen" allowfullscreen hidden></iframe>
+</div>
 <script>
+  document.getElementById('startBtn').addEventListener('click', function () {
+    var f = document.getElementById('sco');
+    f.src = f.dataset.src; f.hidden = false;
+    document.getElementById('cover').remove();
+    f.focus();
+  });
   window.onScormProgress = function (r) { document.getElementById('status').textContent = 'Status: ' + r.status + ' · course ' + r.percent + '%'; };
   window.onScormFinish = function () { /* course called LMSFinish – stay on page; learner uses Next/Exit */ };
 </script>
