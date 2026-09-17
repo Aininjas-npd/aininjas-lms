@@ -17,8 +17,9 @@ const PORT = process.env.PORT || 3000;
 const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const trim = v => String(v || '').trim().replace(/\/$/, '');
 
-function service({ internal, external, prefix }) {
-  internal = trim(internal); external = trim(external);
+const validUrl = (v, name) => { if (!v) return ''; try { const u = new URL(v); if (/^https?:$/.test(u.protocol) && u.hostname) return v; } catch {} console.warn(`[one site] ${name}="${v}" is not a valid URL — ignored. Expected e.g. http://<service>.railway.internal:4000`); return ''; };
+function service({ internal, external, prefix, name }) {
+  internal = validUrl(trim(internal), name + '_INTERNAL_URL'); external = trim(external);
   const on = !!internal;
   return {
     on, prefix, internal,
@@ -28,7 +29,7 @@ function service({ internal, external, prefix }) {
   };
 }
 
-const quiz = service({ internal: process.env.QUIZ_STUDIO_INTERNAL_URL, external: process.env.QUIZ_STUDIO_URL, prefix: '/assess' });
-const accounts = service({ internal: process.env.ACCOUNTS_INTERNAL_URL, external: process.env.ACCOUNTS_URL, prefix: '/account' });
+const quiz = service({ internal: process.env.QUIZ_STUDIO_INTERNAL_URL, external: process.env.QUIZ_STUDIO_URL, prefix: '/assess', name: 'QUIZ_STUDIO' });
+const accounts = service({ internal: process.env.ACCOUNTS_INTERNAL_URL, external: process.env.ACCOUNTS_URL, prefix: '/account', name: 'ACCOUNTS' });
 
 module.exports = { BASE_URL, quiz, accounts, any: quiz.on || accounts.on };

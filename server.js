@@ -30,13 +30,6 @@ app.use(session({
 app.use(auth.currentUser);
 app.use(brand.context);                          // school co-branding: res.locals.brand / brandCss
 
-/* One site: forward /assess/* and /account/* to the other services before any body parser touches the request,
-   passing along the Academy's menu so their pages wear the same header. */
-app.locals.pluginNavFor = user => plugins.nav(user && user.role === 'admin');
-if (onesite.quiz.on) require('./src/proxy').mount(app, { prefix: onesite.quiz.prefix, target: onesite.quiz.internal, secret: process.env.QUIZ_LAUNCH_SECRET, shell: shell.shellFor });
-if (onesite.accounts.on) require('./src/proxy').mount(app, { prefix: onesite.accounts.prefix, target: onesite.accounts.internal, secret: process.env.SSO_SECRET, shell: shell.shellFor });   // Accounts checks the proof against our registered app secret
-
-app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {                    // template globals
   res.locals.siteName = process.env.SITE_NAME || 'AI Ninjas Academy';
   res.locals.mainSite = process.env.MAIN_SITE_URL || 'https://aininjas.com';
@@ -47,6 +40,15 @@ app.use((req, res, next) => {                    // template globals
   res.locals.accountHref = req.user && req.user.sso_sub && onesite.accounts.configured ? (onesite.accounts.on ? onesite.accounts.prefix + '/' : onesite.accounts.public + '/') : null;
   next();
 });
+
+/* One site: forward /assess/* and /account/* to the other services before any body parser touches the request,
+   passing along the Academy's menu so their pages wear the same header. */
+app.locals.pluginNavFor = user => plugins.nav(user && user.role === 'admin');
+if (onesite.quiz.on) require('./src/proxy').mount(app, { prefix: onesite.quiz.prefix, target: onesite.quiz.internal, secret: process.env.QUIZ_LAUNCH_SECRET, shell: shell.shellFor });
+if (onesite.accounts.on) require('./src/proxy').mount(app, { prefix: onesite.accounts.prefix, target: onesite.accounts.internal, secret: process.env.SSO_SECRET, shell: shell.shellFor });   // Accounts checks the proof against our registered app secret
+
+app.use(express.urlencoded({ extended: true }));
+
 
 // Plugins get a way to mount routers before the 404 handler.
 plugins.load(app, {
