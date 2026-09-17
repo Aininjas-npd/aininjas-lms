@@ -1,6 +1,6 @@
-// Quiz attempts made outside the Academy (plain Quiz Studio share links) for the class reports.
+// Quiz attempts made outside a course (live sessions, plain Quiz Studio share links) for the class reports.
 //
-// Only quizzes launched from the Academy post their results back. Everything else lives in Quiz Studio, so the reports
+// Only quizzes launched from a course step in the Academy post their results back. Everything else lives in Quiz Studio, so the reports
 // ask Quiz Studio for the school's attempts (over the private network in one-site mode) and match them to students:
 //   1. by student_ref — the Academy user id Quiz Studio stored for launched attempts (already known to the Academy, but
 //      it also lets a launched attempt that failed to post back be shown);
@@ -40,7 +40,7 @@ async function outsideByStudent(schoolSlug, students) {
     if (a.launched) continue;                                   // launched from the Academy → already in step_progress
     const uid = (a.student_ref && byRef.get(String(a.student_ref))) || byName.get(key(a.student_name, a.class_name));
     if (!uid) continue;
-    (out[uid] = out[uid] || []).push({ id: a.id, quiz_id: a.quiz_id, title: a.quiz_title, points: a.points + (a.teacher_points || 0), max: a.max_points, accuracy: a.accuracy, belt: a.belt, when: a.created_at });
+    (out[uid] = out[uid] || []).push({ id: a.id, quiz_id: a.quiz_id, title: a.quiz_title, live: !!a.live, points: a.points + (a.teacher_points || 0), max: a.max_points, accuracy: a.accuracy, belt: a.belt, when: a.created_at });
   }
   /* best attempt per quiz per student */
   for (const uid of Object.keys(out)) {
@@ -71,6 +71,7 @@ async function diagnose(schoolSlug, students) {
   const miss = new Map();
   for (const a of d.rows) {
     if (a.launched) { d.launched++; continue; }
+    if (a.live) d.live = (d.live || 0) + 1;
     const u = (a.student_ref && byRef.get(String(a.student_ref))) || byName.get(key(a.student_name, a.class_name));
     if (u) { d.matched++; continue; }
     const k = key(a.student_name, a.class_name);

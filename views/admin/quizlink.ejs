@@ -13,7 +13,8 @@
     <tr><th>School asked for</th><td><code><%= d.school %></code></td></tr>
     <tr><th>Response</th><td><% if (d.error) { %><span class="badge revoked">problem</span> <%= d.error %><% } else { %><span class="badge active">OK</span> HTTP <%= d.status %> · <b><%= d.rows.length %></b> attempts for this school<% } %></td></tr>
     <% if (!d.error) { %>
-    <tr><th>Launched from the Academy</th><td><%= d.launched %> <span class="muted small">— these arrive by postback and show under the course, not as “outside”</span></td></tr>
+    <tr><th>Launched from a course step</th><td><%= d.launched %> <span class="muted small">— these arrive by postback and show under the course, not as “outside”</span></td></tr>
+    <tr><th>Outside a course</th><td><%= d.rows.length - d.launched %> <span class="muted small">— <%= d.live || 0 %> from live sessions, <%= d.rows.length - d.launched - (d.live || 0) %> through share links</span></td></tr>
     <tr><th>Outside, matched to a student</th><td><b><%= d.matched %></b> <span class="muted small">— shown as “+n outside” on the class and student pages</span></td></tr>
     <tr><th>Outside, no matching student</th><td><b><%= d.unmatched.reduce((n, m) => n + m.n, 0) %></b> attempts from <%= d.unmatched.length %> name/class combinations <span class="muted small">— listed below</span></td></tr>
     <% } %>

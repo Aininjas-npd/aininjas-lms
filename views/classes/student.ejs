@@ -14,9 +14,9 @@
   <div class="card stat"><p class="eyebrow">Quiz average</p><h2 style="margin:0"><%= s.quizAvg != null ? s.quizAvg + '%' : '—' %></h2><p class="small muted" style="margin:4px 0 0"><%= s.quizSteps.done %> of <%= s.quizSteps.total %> quizzes<%= s.outside.length ? ' · +' + s.outside.length + ' outside' : '' %></p></div>
 </div>
 <% if (s.outside.length) { %>
-<div class="card"><h3 style="margin-top:0">Quizzes taken outside the Academy <span class="muted small">— through a share link; best attempt per quiz<%= locals.outsideCounts ? ', counted in the average' : ', not counted in the average' %></span></h3>
+<div class="card"><h3 style="margin-top:0">Quizzes taken outside the Academy <span class="muted small">— in a live session or through a share link; best attempt per quiz<%= locals.outsideCounts ? ', counted in the average' : ', not counted in the average' %></span></h3>
   <table class="table"><thead><tr><th>Quiz</th><th class="num">Score</th><th class="num">Accuracy</th><th>Belt</th><th>When</th></tr></thead><tbody>
-  <% s.outside.forEach(a => { %><tr><td><%= a.title %></td><td class="num"><%= a.points %>/<%= a.max %></td><td class="num"><%= a.accuracy %>%</td><td><%= a.belt %></td><td class="small muted"><%= fmt(a.when) %></td></tr><% }) %>
+  <% s.outside.forEach(a => { %><tr><td><%= a.title %><% if (a.live) { %> <span class="muted small">live session</span><% } %></td><td class="num"><%= a.points %>/<%= a.max %></td><td class="num"><%= a.accuracy %>%</td><td><%= a.belt %></td><td class="small muted"><%= fmt(a.when) %></td></tr><% }) %>
   </tbody></table></div>
 <% } %>
 <% if (!s.courses.length) { %><div class="card"><p class="muted">Not enrolled in any course yet.</p></div><% } %>
