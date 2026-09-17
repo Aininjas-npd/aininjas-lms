@@ -156,3 +156,15 @@ write are acknowledged but ignored (`readOnlyWhileViewing` in `src/auth.js`), qu
 quizzes can't be joined. “Stop viewing” returns you to the person's record in Accounts; because the Academy keeps one
 session per browser, your own Academy tabs show that person too until you stop. Every start is audited in Accounts
 (`impersonate.start`) and logged in the Academy's events (`viewed_as`).
+
+## Progress by content type and school overview (Phase B)
+
+* Class pages and each student's page split progress into **Lessons** (SCORM lessons completed), **Code** (Colab
+  notebooks marked done) and **Quiz average** (best score on quizzes launched from the Academy), next to the overall
+  percentage. Ended enrolments stay in the reports.
+* **School overview** (`/classes/school`, school admins and AI Ninjas admins): one row per class with the same measures,
+  finished-all / not-started / active-this-week counts and a total line. Averages count students who have a course.
+* **Quizzes taken outside the Academy** (plain Quiz Studio share links) are pulled from Quiz Studio (`src/quizpull.js`,
+  `GET /api/sso/attempts?school=` with the launch secret, cached a minute), matched by the student's Academy id or by
+  name + class, shown as "+n outside" on the class page and as a table on the student page, and listed in the CSV.
+  They are **not** counted in the quiz average unless `QUIZ_OUTSIDE_COUNTS=1`.

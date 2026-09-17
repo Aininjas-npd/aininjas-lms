@@ -7,26 +7,30 @@
 </div>
 <form method="get" action="/classes/<%= encodeURIComponent(name) %>" class="row gap" style="margin:0 0 14px"><% if (user.role === 'admin') { %><input type="hidden" name="school" value="<%= sc.school.slug %>"><% } %>
   <input type="search" name="q" value="<%= locals.qtext || '' %>" placeholder="Find a student in <%= name %>…" style="max-width:360px" autocomplete="off"><button class="btn small ghost" type="submit">Search</button><% if (locals.qtext) { %><span class="small muted"><%= list.length %> of <%= totalStudents %></span> <a class="small" href="/classes/<%= encodeURIComponent(name) %><%= qs %>">clear</a><% } %></form>
-<div class="stats">
-  <div class="card stat"><p class="eyebrow">Students</p><h2 style="margin:0"><%= stats.students %></h2></div>
-  <div class="card stat"><p class="eyebrow">Average completion</p><h2 style="margin:0"><%= stats.avgPercent %>%</h2><p class="small muted" style="margin:4px 0 0"><%= stats.completedAll %> finished everything · <%= stats.notStarted %> not started</p></div>
-  <div class="card stat"><p class="eyebrow">Active this week</p><h2 style="margin:0"><%= stats.activeWeek %></h2></div>
-  <div class="card stat"><p class="eyebrow">Quiz average</p><h2 style="margin:0"><%= stats.quizAvg != null ? stats.quizAvg + '%' : '—' %></h2></div>
+<% const pc = v => v == null ? '—' : v + '%'; %>
+<div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
+  <div class="card stat"><p class="eyebrow">Students</p><h2 style="margin:0"><%= stats.students %></h2><p class="small muted" style="margin:4px 0 0"><%= stats.activeWeek %> active this week</p></div>
+  <div class="card stat"><p class="eyebrow">Overall</p><h2 style="margin:0"><%= stats.avgPercent %>%</h2><p class="small muted" style="margin:4px 0 0"><%= stats.completedAll %> finished all · <%= stats.notStarted %> not started</p></div>
+  <div class="card stat"><p class="eyebrow">Lessons</p><h2 style="margin:0"><%= pc(stats.lessonsPct) %></h2></div>
+  <div class="card stat"><p class="eyebrow">Code</p><h2 style="margin:0"><%= pc(stats.codePct) %></h2></div>
+  <div class="card stat"><p class="eyebrow">Quiz average</p><h2 style="margin:0"><%= pc(stats.quizAvg) %></h2><% if (stats.outsideAttempts) { %><p class="small muted" style="margin:4px 0 0">+<%= stats.outsideAttempts %> outside Academy</p><% } %></div>
 </div>
 <div class="card">
-  <div class="tw"><table class="table"><thead><tr><th>Student</th><% courses.forEach(c => { %><th><%= c.title %></th><% }) %><th>Overall</th><th class="num">Quiz avg</th><th>Last active</th><% if (canMove) { %><th>Class</th><% } %></tr></thead><tbody>
+  <div class="tw"><table class="table"><thead><tr><th>Student</th><% courses.forEach(c => { %><th><%= c.title %></th><% }) %><th>Overall</th><th class="num" title="SCORM lessons completed">Lessons</th><th class="num" title="Colab notebooks marked done">Code</th><th class="num" title="Best score on quizzes launched from the Academy; “+n outside” = attempts through share links, not counted">Quiz avg</th><th>Last active</th><% if (canMove) { %><th>Class</th><% } %></tr></thead><tbody>
   <% list.forEach(s => { %>
     <tr><td><a href="/students/<%= s.user.id %>"><strong><%= s.user.name %></strong></a><br><span class="muted small"><%= s.user.email %></span></td>
       <% courses.forEach(c => { const e = s.courses.find(x => x.course_id === c.id); %>
-        <td style="min-width:140px"><% if (e) { %><div class="progress" style="margin:4px 0"><i style="width:<%= e.summary.percent %>%"></i></div><span class="small muted"><%= e.summary.done %>/<%= e.summary.total %> · <%= e.summary.percent %>%</span><% } else { %><span class="muted small">not enrolled</span><% } %></td>
+        <td style="min-width:140px"><% if (e) { %><div class="progress" style="margin:4px 0"><i style="width:<%= e.summary.percent %>%"></i></div><span class="small muted"><%= e.summary.done %>/<%= e.summary.total %> · <%= e.summary.percent %>%<%= e.status === 'ended' ? ' · ended' : '' %></span><% } else { %><span class="muted small">not enrolled</span><% } %></td>
       <% }) %>
       <td style="min-width:120px"><% if (s.total) { %><b><%= s.percent %>%</b> <span class="small muted"><%= s.done %>/<%= s.total %> steps</span><% } else { %><span class="muted small">—</span><% } %></td>
-      <td class="num"><%= s.quizAvg != null ? s.quizAvg + '%' : '—' %></td>
+      <td class="num"><%= s.lessons.total ? s.lessons.percent + '%' : '—' %><% if (s.lessons.total) { %><br><span class="muted small"><%= s.lessons.done %>/<%= s.lessons.total %></span><% } %></td>
+      <td class="num"><%= s.code.total ? s.code.percent + '%' : '—' %><% if (s.code.total) { %><br><span class="muted small"><%= s.code.done %>/<%= s.code.total %></span><% } %></td>
+      <td class="num"><%= s.quizAvg != null ? s.quizAvg + '%' : '—' %><% if (s.quizSteps.total) { %><br><span class="muted small"><%= s.quizSteps.done %>/<%= s.quizSteps.total %></span><% } %><% if (s.outside.length) { %><br><span class="muted small" title="<%= s.outside.map(a => a.title + ' ' + a.points + '/' + a.max).join(', ') %>">+<%= s.outside.length %> outside</span><% } %></td>
       <td class="small"><%= fmt(s.lastActive) %></td>
       <% if (canMove) { %><td><form method="post" action="/students/<%= s.user.id %>/class" style="margin:0"><select name="class_name" style="width:auto" onchange="this.form.submit()"><option value="">— none —</option><% sc.classes.forEach(c => { %><option value="<%= c %>" <%= c === s.user.class_name ? 'selected' : '' %>><%= c %></option><% }) %></select></form></td><% } %>
     </tr>
   <% }) %>
-  <% if (!list.length) { %><tr><td colspan="<%= courses.length + 5 %>" class="muted">No students in this class yet. Students join by picking their class the first time they sign in<%= canMove ? ', or place them from the Classes page' : '' %>.</td></tr><% } %>
+  <% if (!list.length) { %><tr><td colspan="<%= courses.length + 7 %>" class="muted">No students in this class yet. Students join by picking their class the first time they sign in<%= canMove ? ', or place them from the Classes page' : '' %>.</td></tr><% } %>
   </tbody></table></div>
 </div>
 <%- include('../partials/footer') %>

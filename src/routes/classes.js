@@ -40,27 +40,36 @@ router.get('/classes', requireStaff, async (req, res) => {
   res.render('classes/index', { title: 'Classes', sc: scope, cards, unassigned, noSchool: false, qtext, found });
 });
 
+/* ---------- school admins / admins: the whole school, one row per class ---------- */
+router.get('/classes/school', requireStaff, async (req, res) => {
+  const scope = await classesLib.scopeFor(req.user, String(req.query.school || ''));
+  if (!scope.school || !scope.all) return res.status(403).render('error', { title: 'School admins only', message: 'The school overview is for school admins and AI Ninjas admins.' });
+  const st = await classesLib.schoolStats(scope.school.slug, scope.classes);
+  res.render('classes/school', { title: scope.school.name, sc: scope, st });
+});
+
 /* ---------- staff: one class ---------- */
 router.get('/classes/:name', requireStaff, async (req, res) => {
   const scope = await classesLib.scopeFor(req.user, String(req.query.school || ''));
   const name = req.params.name;
   if (!scope.school || !(scope.all || scope.classes.includes(name))) return res.status(403).render('error', { title: 'Not your class', message: 'You can only see the classes assigned to you.' });
   const qtext = String(req.query.q || '').trim();
-  const all = classesLib.students(scope.school.slug, name);
+  const all = await classesLib.withOutside(scope.school.slug, classesLib.students(scope.school.slug, name));
   const list = qtext ? all.filter(s => classesLib.matches(s.user, qtext)) : all;
-  const courses = q.courses.all().filter(c => c.is_published && all.some(s => s.courses.some(x => x.course_id === c.id)));
-  res.render('classes/class', { title: name, sc: scope, name, list, courses, stats: classesLib.classStats(scope.school.slug, name), canMove: scope.all, qtext, totalStudents: all.length });
+  const courses = q.courses.all().filter(c => all.some(s => s.courses.some(x => x.course_id === c.id)));
+  res.render('classes/class', { title: name, sc: scope, name, list, courses, stats: classesLib.classStats(scope.school.slug, name, all), canMove: scope.all, qtext, totalStudents: all.length });
 });
 
 router.get('/classes/:name/export.csv', requireStaff, async (req, res) => {
   const scope = await classesLib.scopeFor(req.user, String(req.query.school || ''));
   const name = req.params.name;
   if (!scope.school || !(scope.all || scope.classes.includes(name))) return res.sendStatus(403);
-  const list = classesLib.students(scope.school.slug, name);
+  const list = await classesLib.withOutside(scope.school.slug, classesLib.students(scope.school.slug, name));
   const courses = q.courses.all().filter(c => list.some(s => s.courses.some(x => x.course_id === c.id)));
   const csv = v => { const t = String(v ?? ''); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
-  const lines = [['Student', 'Email', 'Class', ...courses.map(c => c.title + ' %'), 'Overall %', 'Steps done', 'Steps total', 'Quiz avg %', 'Last active'].map(csv).join(',')];
-  list.forEach(s => lines.push([s.user.name, s.user.email, s.user.class_name || '', ...courses.map(c => { const e = s.courses.find(x => x.course_id === c.id); return e ? e.summary.percent : ''; }), s.percent, s.done, s.total, s.quizAvg ?? '', s.lastActive || ''].map(csv).join(',')));
+  const lines = [['Student', 'Email', 'Class', ...courses.map(c => c.title + ' %'), 'Overall %', 'Steps done', 'Steps total', 'Lessons %', 'Lessons done', 'Lessons total', 'Code %', 'Code done', 'Code total', 'Quizzes done', 'Quizzes total', 'Quiz avg %', 'Outside-Academy quizzes', 'Last active'].map(csv).join(',')];
+  list.forEach(s => lines.push([s.user.name, s.user.email, s.user.class_name || '', ...courses.map(c => { const e = s.courses.find(x => x.course_id === c.id); return e ? e.summary.percent : ''; }), s.percent, s.done, s.total,
+    s.lessons.percent ?? '', s.lessons.done, s.lessons.total, s.code.percent ?? '', s.code.done, s.code.total, s.quizSteps.done, s.quizSteps.total, s.quizAvg ?? '', s.outside.map(a => `${a.title} ${a.points}/${a.max}`).join('; '), s.lastActive || ''].map(csv).join(',')));
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${scope.school.slug}-${name.replace(/[^a-z0-9]+/gi, '-')}.csv"`);
   res.send(lines.join('\n'));
@@ -70,9 +79,9 @@ router.get('/classes/:name/export.csv', requireStaff, async (req, res) => {
 router.get('/students/:id', requireStaff, async (req, res) => {
   const u = q.userById.get(req.params.id);
   if (!u || !classesLib.canSee(req.user, u)) return res.status(403).render('error', { title: 'Not your student', message: 'You can only see students in your classes.' });
-  const s = classesLib.studentSummary(u);
+  const [s] = await classesLib.withOutside(u.school_slug, [classesLib.studentSummary(u)]);
   const scope = await classesLib.scopeFor(req.user, u.school_slug || '');
-  res.render('classes/student', { title: u.name, s, sc: scope, quizUrl: pathLib.QUIZ_URL });
+  res.render('classes/student', { title: u.name, s, sc: scope, quizUrl: pathLib.QUIZ_URL, outsideCounts: require('../quizpull').COUNTS });
 });
 
 /* ---------- school admins / AI Ninjas admins: move a student to another class ---------- */

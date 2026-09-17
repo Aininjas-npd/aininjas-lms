@@ -23,18 +23,22 @@ function navFor(user, path = '', pluginNav = [], viewing = false) {
   return items;
 }
 
-/** What the proxy sends upstream for this request: menu + who + where Account / Log out go. */
+/** What the proxy sends upstream for this request: menu + who + where Account / Log out go.
+ *  Links are absolute on purpose: the other apps rewrite root-relative URLs that start with one of their own
+ *  segments (Accounts and Quiz Studio both own "/admin"), so "/admin/courses" would come out as "/account/admin/courses". */
 function shellFor(req) {
   const user = req.user;
   if (!user || user.status !== 'approved') return null;
+  const abs = href => (/^https?:\/\//.test(href) ? href : onesite.BASE_URL + href);
   return {
-    app_name: process.env.SITE_NAME || 'AI Ninjas Academy', app_tag: 'Academy', home: '/',
-    nav: navFor(user, String(req.originalUrl || req.path).split('?')[0], req.app.locals.pluginNavFor ? req.app.locals.pluginNavFor(user) : [], !!req.actor),   // originalUrl: inside the proxy mount req.path has lost the prefix
+    app_name: process.env.SITE_NAME || 'AI Ninjas Academy', app_tag: 'Academy', home: abs('/'),
+    nav: navFor(user, String(req.originalUrl || req.path).split('?')[0], req.app.locals.pluginNavFor ? req.app.locals.pluginNavFor(user) : [], !!req.actor)   // originalUrl: inside the proxy mount req.path has lost the prefix
+      .map(n => ({ ...n, href: abs(n.href) })),
     user: { name: user.name, role_label: ROLE_LABEL[user.role] || 'Learner' },
-    profile: '/profile',
+    profile: abs('/profile'),
     viewing_as: req.actor ? { by: req.actor.name } : null,
-    account: !req.actor && user.sso_sub && onesite.accounts.configured ? (onesite.accounts.on ? onesite.accounts.prefix + '/' : onesite.accounts.public + '/') : null,
-    logout: '/logout',
+    account: !req.actor && user.sso_sub && onesite.accounts.configured ? (onesite.accounts.on ? abs(onesite.accounts.prefix + '/') : onesite.accounts.public + '/') : null,
+    logout: abs('/logout'),
   };
 }
 

@@ -1,0 +1,28 @@
+<%- include('../partials/header') %>
+<% const qs = user.role === 'admin' ? '?school=' + encodeURIComponent(sc.school.slug) : ''; const pc = v => v == null ? '—' : v + '%'; %>
+<p class="small"><a href="/classes<%= qs %>">← Classes</a></p>
+<div class="row between wrap">
+  <div><p class="eyebrow">School overview</p><h1 style="margin-top:4px"><%= sc.school.name %></h1>
+    <p class="muted" style="margin:4px 0 0">Every class side by side: lessons, code and quizzes. Averages count students who have something assigned; ended enrolments stay in.</p></div>
+  <span class="actions"><a class="btn ghost small" href="/classes/enrolments<%= qs %>">Enrolments</a><% if (user.role === 'admin') { %><a class="btn small" href="/admin/enroll<%= qs %>">+ Enrol students</a><% } %></span>
+</div>
+<div class="stats">
+  <div class="card stat"><p class="eyebrow">Students</p><h2 style="margin:0"><%= st.students %></h2><p class="small muted" style="margin:4px 0 0"><%= st.total.withWork %> with a course<%= st.unassigned ? ' · ' + st.unassigned + ' not in a class' : '' %></p></div>
+  <div class="card stat"><p class="eyebrow">Lessons</p><h2 style="margin:0"><%= pc(st.total.lessonsPct) %></h2><p class="small muted" style="margin:4px 0 0">average completion</p></div>
+  <div class="card stat"><p class="eyebrow">Code</p><h2 style="margin:0"><%= pc(st.total.codePct) %></h2><p class="small muted" style="margin:4px 0 0">notebooks done</p></div>
+  <div class="card stat"><p class="eyebrow">Quiz average</p><h2 style="margin:0"><%= pc(st.total.quizAvg) %></h2><p class="small muted" style="margin:4px 0 0"><%= st.total.outsideAttempts %> outside-Academy attempt<%= st.total.outsideAttempts === 1 ? '' : 's' %></p></div>
+</div>
+<div class="card"><div class="tw"><table class="table"><thead><tr><th>Class</th><th class="num">Students</th><th>Overall</th><th class="num">Lessons</th><th class="num">Code</th><th class="num">Quiz avg</th><th class="num">Finished all</th><th class="num">Not started</th><th class="num">Active this week</th></tr></thead><tbody>
+<% st.rows.forEach(c => { %>
+  <tr><td><a href="/classes/<%= encodeURIComponent(c.name) %><%= qs %>"><strong><%= c.name %></strong></a></td>
+    <td class="num"><%= c.students %></td>
+    <td style="min-width:150px"><div class="progress" style="margin:4px 0"><i style="width:<%= c.avgPercent %>%"></i></div><span class="small muted"><%= c.avgPercent %>%<%= c.withWork < c.students ? ' · ' + (c.students - c.withWork) + ' without a course' : '' %></span></td>
+    <td class="num"><%= pc(c.lessonsPct) %></td><td class="num"><%= pc(c.codePct) %></td><td class="num"><%= pc(c.quizAvg) %><% if (c.outsideAttempts) { %> <span class="muted small" title="quiz attempts made through share links, outside the Academy">+<%= c.outsideAttempts %> outside</span><% } %></td>
+    <td class="num"><%= c.completedAll %></td><td class="num"><%= c.notStarted %></td><td class="num"><%= c.activeWeek %></td></tr>
+<% }) %>
+<% if (!st.rows.length) { %><tr><td colspan="9" class="muted">No classes yet.</td></tr><% } %>
+</tbody>
+<% if (st.rows.length > 1) { const t = st.total; %><tfoot><tr style="font-weight:700"><td>All classes</td><td class="num"><%= t.students %></td><td><%= t.avgPercent %>%</td><td class="num"><%= pc(t.lessonsPct) %></td><td class="num"><%= pc(t.codePct) %></td><td class="num"><%= pc(t.quizAvg) %></td><td class="num"><%= t.completedAll %></td><td class="num"><%= t.notStarted %></td><td class="num"><%= t.activeWeek %></td></tr></tfoot><% } %>
+</table></div></div>
+<p class="hint">Lessons = SCORM lessons completed; Code = Colab notebooks marked done; Quiz average = best score on quizzes launched from the Academy. Quizzes taken through plain share links are shown as “outside” and not counted in the average.</p>
+<%- include('../partials/footer') %>

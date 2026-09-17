@@ -7,15 +7,22 @@
   <form method="post" action="/students/<%= u.id %>/class" class="row gap"><label class="small muted">Class</label><select name="class_name" style="width:auto" onchange="this.form.submit()"><option value="">— none —</option><% sc.classes.forEach(c => { %><option value="<%= c %>" <%= c === u.class_name ? 'selected' : '' %>><%= c %></option><% }) %></select></form>
   <% } %>
 </div>
-<div class="stats">
-  <div class="card stat"><p class="eyebrow">Overall</p><h2 style="margin:0"><%= s.percent %>%</h2><p class="small muted" style="margin:4px 0 0"><%= s.done %> of <%= s.total %> steps</p></div>
-  <div class="card stat"><p class="eyebrow">Courses</p><h2 style="margin:0"><%= s.courses.length %></h2><p class="small muted" style="margin:4px 0 0"><%= s.completed %> completed</p></div>
-  <div class="card stat"><p class="eyebrow">Quiz average</p><h2 style="margin:0"><%= s.quizAvg != null ? s.quizAvg + '%' : '—' %></h2></div>
+<div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
+  <div class="card stat"><p class="eyebrow">Overall</p><h2 style="margin:0"><%= s.percent %>%</h2><p class="small muted" style="margin:4px 0 0"><%= s.done %> of <%= s.total %> steps · <%= s.courses.length %> course<%= s.courses.length === 1 ? '' : 's' %>, <%= s.completed %> completed</p></div>
+  <div class="card stat"><p class="eyebrow">Lessons</p><h2 style="margin:0"><%= s.lessons.total ? s.lessons.percent + '%' : '—' %></h2><p class="small muted" style="margin:4px 0 0"><%= s.lessons.done %> of <%= s.lessons.total %></p></div>
+  <div class="card stat"><p class="eyebrow">Code</p><h2 style="margin:0"><%= s.code.total ? s.code.percent + '%' : '—' %></h2><p class="small muted" style="margin:4px 0 0"><%= s.code.done %> of <%= s.code.total %> notebooks</p></div>
+  <div class="card stat"><p class="eyebrow">Quiz average</p><h2 style="margin:0"><%= s.quizAvg != null ? s.quizAvg + '%' : '—' %></h2><p class="small muted" style="margin:4px 0 0"><%= s.quizSteps.done %> of <%= s.quizSteps.total %> quizzes<%= s.outside.length ? ' · +' + s.outside.length + ' outside' : '' %></p></div>
 </div>
+<% if (s.outside.length) { %>
+<div class="card"><h3 style="margin-top:0">Quizzes taken outside the Academy <span class="muted small">— through a share link; best attempt per quiz<%= locals.outsideCounts ? ', counted in the average' : ', not counted in the average' %></span></h3>
+  <table class="table"><thead><tr><th>Quiz</th><th class="num">Score</th><th class="num">Accuracy</th><th>Belt</th><th>When</th></tr></thead><tbody>
+  <% s.outside.forEach(a => { %><tr><td><%= a.title %></td><td class="num"><%= a.points %>/<%= a.max %></td><td class="num"><%= a.accuracy %>%</td><td><%= a.belt %></td><td class="small muted"><%= fmt(a.when) %></td></tr><% }) %>
+  </tbody></table></div>
+<% } %>
 <% if (!s.courses.length) { %><div class="card"><p class="muted">Not enrolled in any course yet.</p></div><% } %>
 <% s.courses.forEach(c => { const sm = c.summary; %>
 <div class="card">
-  <div class="row between wrap"><h3 style="margin:0"><%= c.title %></h3><span class="badge <%= sm.status %>"><%= sm.status.replace('_', ' ') %></span></div>
+  <div class="row between wrap"><h3 style="margin:0"><%= c.title %></h3><span><% if (c.status === 'ended') { %><span class="badge revoked">ended<%= c.ends_on ? ' ' + c.ends_on : '' %></span> <% } %><span class="badge <%= sm.status %>"><%= sm.status.replace('_', ' ') %></span></span></div>
   <div class="progress" style="margin:10px 0 4px"><i style="width:<%= sm.percent %>%"></i></div>
   <p class="small muted" style="margin:0 0 10px"><%= sm.done %>/<%= sm.total %> · <%= sm.percent %>%<% if (sm.next) { %> · next: <%= sm.next.title %><% } %></p>
   <table class="table"><thead><tr><th>#</th><th>Step</th><th>Status</th><th>Score</th><th>When</th></tr></thead><tbody>
