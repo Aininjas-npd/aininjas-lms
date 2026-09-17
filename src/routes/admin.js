@@ -228,6 +228,15 @@ router.post('/users/sync-accounts', async (req, res) => {
   catch (e) { flash(req, 'error', 'Sync failed: ' + e.message); }
   res.redirect('/admin/users');
 });
+/* Quiz Studio link check: shows what the class reports get for a school and why attempts do or don't match students */
+router.get('/quiz-link', async (req, res) => {
+  const schools = await brand.listSchools();
+  const slug = String(req.query.school || (schools[0] || {}).slug || '');
+  const students = db.prepare("SELECT id, name, class_name FROM users WHERE role='learner' AND school_slug=? AND status='approved'").all(slug);
+  const d = await require('../quizpull').diagnose(slug, students);
+  res.render('admin/quizlink', { title: 'Quiz Studio link check', d, schools, slug, students });
+});
+
 router.get('/users', async (req, res) => {
   const filter = req.query.status || 'all';
   const qtext = String(req.query.q || '').trim(), fSchool = String(req.query.school || ''), fClass = String(req.query.class || ''), fRole = String(req.query.role || '');

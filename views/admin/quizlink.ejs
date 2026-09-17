@@ -1,0 +1,45 @@
+<%- include('../partials/header') %>
+<p class="small"><a href="/admin/users">← Users</a></p>
+<div class="row between wrap">
+  <div><p class="eyebrow">Admin</p><h1 style="margin-top:4px">Quiz Studio link check</h1>
+    <p class="muted" style="margin:4px 0 0">What the class reports receive from Quiz Studio for a school, and why each quiz attempt is or isn't shown against a student.</p></div>
+  <form method="get" action="/admin/quiz-link" class="inline"><select name="school" style="width:auto" onchange="this.form.submit()"><% schools.forEach(s => { %><option value="<%= s.slug %>" <%= s.slug === slug ? 'selected' : '' %>><%= s.name %></option><% }) %></select></form>
+</div>
+
+<div class="card">
+  <table class="table"><tbody>
+    <tr><th style="width:220px">Quiz Studio API</th><td><code><%= d.api || 'not set' %></code></td></tr>
+    <tr><th>QUIZ_LAUNCH_SECRET</th><td><%= d.secret ? 'set' : '<b>missing</b>' %></td></tr>
+    <tr><th>School asked for</th><td><code><%= d.school %></code></td></tr>
+    <tr><th>Response</th><td><% if (d.error) { %><span class="badge revoked">problem</span> <%= d.error %><% } else { %><span class="badge active">OK</span> HTTP <%= d.status %> · <b><%= d.rows.length %></b> attempts for this school<% } %></td></tr>
+    <% if (!d.error) { %>
+    <tr><th>Launched from the Academy</th><td><%= d.launched %> <span class="muted small">— these arrive by postback and show under the course, not as “outside”</span></td></tr>
+    <tr><th>Outside, matched to a student</th><td><b><%= d.matched %></b> <span class="muted small">— shown as “+n outside” on the class and student pages</span></td></tr>
+    <tr><th>Outside, no matching student</th><td><b><%= d.unmatched.reduce((n, m) => n + m.n, 0) %></b> attempts from <%= d.unmatched.length %> name/class combinations <span class="muted small">— listed below</span></td></tr>
+    <% } %>
+  </tbody></table>
+</div>
+
+<% if (d.unmatched.length) { %>
+<div class="card">
+  <h3 style="margin-top:0">Attempts that don't match any student</h3>
+  <p class="muted small">An attempt matches when its <b>name and class</b> equal an Academy student's name and class (case-insensitive) in this school. Fix by renaming the student in Accounts to match, or by editing the name/class on the attempt in Quiz Studio → Results.</p>
+  <div class="tw"><table class="table"><thead><tr><th>Name on the attempt</th><th>Class on the attempt</th><th class="num">Attempts</th><th>Quizzes</th><th>Closest Academy student</th></tr></thead><tbody>
+  <% const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+     const closest = (name, cls) => { const n = norm(name); const toks = n.split(' ').filter(Boolean);
+       let best = null, score = 0; students.forEach(u => { const un = norm(u.name); let sc = 0; toks.forEach(t => { if (t.length > 1 && un.includes(t)) sc += t.length; }); if (un === n) sc += 100; if (sc > score) { score = sc; best = u; } });
+       return best && score >= 3 ? best : null; };
+     d.unmatched.forEach(m => { const c = closest(m.name, m.class_name); %>
+    <tr><td><%= m.name || '—' %></td><td><%= m.class_name || '—' %></td><td class="num"><%= m.n %></td><td class="small"><%= m.quizzes.join(', ') %></td>
+      <td class="small"><% if (c) { %><%= c.name %> <span class="muted">(<%= c.class_name || 'no class' %>)</span><% if (norm(c.name) === norm(m.name) && norm(c.class_name) !== norm(m.class_name)) { %> <span class="badge pending">class differs</span><% } %><% } else { %><span class="muted">none found</span><% } %></td></tr>
+  <% }) %>
+  </tbody></table></div>
+</div>
+<% } %>
+
+<div class="card">
+  <h3 style="margin-top:0">Academy students in <%= (schools.find(s => s.slug === slug) || {}).name || slug %> (<%= students.length %>)</h3>
+  <% Object.keys(d.studentsByClass).sort().forEach(c => { %><p class="small"><b><%= c %></b> · <%= d.studentsByClass[c].length %>: <span class="muted"><%= d.studentsByClass[c].join(', ') %></span></p><% }) %>
+  <% if (!students.length) { %><p class="muted">No approved students with this school — run “Sync from Accounts” on the Users page.</p><% } %>
+</div>
+<%- include('../partials/footer') %>
