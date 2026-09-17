@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="/aininjas-app.css?v=20260913b">
-<link rel="stylesheet" href="/style.css?v=20260913b">
+<link rel="stylesheet" href="/style.css?v=20260917">
 <% if (locals.brand) { %><style id="school-accent"><%- brandCss %></style><% } %>
 </head>
 <body>
@@ -35,5 +35,6 @@
     <% } %>
   </nav>
 </div></div></header>
+<% if (locals.actor && user) { %><div class="viewing-as"><div class="wrap"><span>👁 Viewing the Academy as <b><%= user.name %></b> (<%= { admin: 'administrator', school_admin: 'school admin', teacher: 'teacher' }[user.role] || 'student' %><%= user.class_name ? ', ' + user.class_name : '' %>) — read-only, nothing you do here is saved.</span><form method="post" action="/stop-viewing" class="inline"><button class="btn small" type="submit">Stop viewing</button></form></div></div><% } %>
 <main class="container">
 <% if (flash) { %><div class="flash <%= flash.type %>"><%= flash.message %></div><% } %>

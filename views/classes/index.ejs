@@ -2,11 +2,25 @@
 <% const qs = sc.school && user.role === 'admin' ? '?school=' + encodeURIComponent(sc.school.slug) : ''; %>
 <div class="row between wrap">
   <div><p class="eyebrow">Classes</p><h1 style="margin-top:4px"><%= sc.school ? sc.school.name : 'Classes' %></h1></div>
+  <span class="actions">
   <% if (user.role === 'admin' && sc.schools.length > 1) { %>
-  <form method="get" action="/classes" class="row gap"><label class="small muted">School</label>
+  <form method="get" action="/classes" class="row gap inline"><label class="small muted">School</label>
     <select name="school" style="width:auto" onchange="this.form.submit()"><% sc.schools.forEach(s => { %><option value="<%= s.slug %>" <%= sc.school && s.slug === sc.school.slug ? 'selected' : '' %>><%= s.name %></option><% }) %></select></form>
   <% } %>
+  <% if (!noSchool) { %><a class="btn ghost small" href="/classes/enrolments<%= qs %>">Enrolments</a><% if (user.role === 'admin') { %><a class="btn small" href="/admin/enroll<%= qs %>">+ Enrol students</a><% } %><% } %>
+  </span>
 </div>
+<% if (!noSchool) { %>
+<form method="get" action="/classes" class="row gap" style="margin:0 0 16px"><% if (user.role === 'admin' && sc.school) { %><input type="hidden" name="school" value="<%= sc.school.slug %>"><% } %>
+  <input type="search" name="q" value="<%= locals.qtext || '' %>" placeholder="Find a student by name, email or class…" style="max-width:420px" autocomplete="off"><button class="btn small ghost" type="submit">Search</button><% if (locals.qtext) { %><a class="small" href="/classes<%= qs %>">clear</a><% } %></form>
+<% if (locals.found) { %>
+<div class="card" style="margin-bottom:18px"><h3 style="margin-top:0"><%= found.length %> student<%= found.length === 1 ? '' : 's' %> matching “<%= qtext %>”<%= found.length === 100 ? ' (first 100)' : '' %></h3>
+  <% if (found.length) { %><table class="table"><thead><tr><th>Student</th><th>Class</th><th>Overall</th><th class="num">Quiz avg</th><th>Last active</th></tr></thead><tbody>
+  <% found.forEach(s => { %><tr><td><a href="/students/<%= s.user.id %>"><strong><%= s.user.name %></strong></a><br><span class="muted small"><%= s.user.email %></span></td><td><%= s.user.class_name ? s.user.class_name : '—' %></td><td><% if (s.total) { %><b><%= s.percent %>%</b> <span class="small muted"><%= s.done %>/<%= s.total %></span><% } else { %><span class="muted small">—</span><% } %></td><td class="num"><%= s.quizAvg != null ? s.quizAvg + '%' : '—' %></td><td class="small"><%= s.lastActive ? s.lastActive.slice(0, 10) : '—' %></td></tr><% }) %>
+  </tbody></table><% } else { %><p class="muted">No one matches. Students are searchable once they appear in a class you can see.</p><% } %>
+</div>
+<% } %>
+<% } %>
 <% if (noSchool) { %>
   <div class="card"><h3>No school yet</h3><p class="muted"><%= user.role === 'admin' ? 'Add a school in Quiz Studio → Schools first.' : 'Your account is not linked to a school yet — ask your AI Ninjas contact to set it on your access.' %></p></div>
 <% } else if (!cards.length) { %>

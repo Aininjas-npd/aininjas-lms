@@ -137,9 +137,10 @@ async function listQuizzes() {
   return r.json();
 }
 /** Signed launch URL: Quiz Studio skips the name gate and posts the score to callbackUrl when the student finishes. */
-function launchUrl({ user, step, course, baseUrl }) {
+function launchUrl({ user, step, course, baseUrl, actor }) {
   const now = Math.floor(Date.now() / 1000);
   const jwt = ssoLib.sign({
+    ...(actor ? { act: { sub: actor.id, name: actor.name } } : {}),   // "View as": Quiz Studio opens the quiz read-only
     iss: 'aininjas-academy', aud: 'quiz-studio', sub: String(user.id), jti: crypto.randomBytes(8).toString('hex'), iat: now, exp: now + 3 * 3600,
     email: user.email, name: user.name, school: user.organization || null, school_slug: user.school_slug || null, class_name: user.class_name || null,
     step_id: step.id, course_id: course.id, source: 'Academy',
@@ -148,9 +149,10 @@ function launchUrl({ user, step, course, baseUrl }) {
   return `${QUIZ_URL}/launch/${step.config.quiz_id}?launch=${encodeURIComponent(jwt)}`;
 }
 /** Signed link into a live (teacher-hosted) session: identity comes with the student, results post back like any quiz. */
-function liveJoinUrl({ user, code, baseUrl }) {
+function liveJoinUrl({ user, code, baseUrl, actor }) {
   const now = Math.floor(Date.now() / 1000);
   const jwt = ssoLib.sign({
+    ...(actor ? { act: { sub: actor.id, name: actor.name } } : {}),
     iss: 'aininjas-academy', aud: 'quiz-studio', sub: String(user.id), jti: crypto.randomBytes(8).toString('hex'), iat: now, exp: now + 6 * 3600,
     email: user.email, name: user.name, school: user.organization || null, school_slug: user.school_slug || null, class_name: user.class_name || null,
     source: 'Academy', callback_url: `${baseUrl}/api/quiz-results`, return_url: `${baseUrl}/dashboard`,

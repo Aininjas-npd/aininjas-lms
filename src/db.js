@@ -116,6 +116,37 @@ if (!ucols.includes('school_slug')) db.exec('ALTER TABLE users ADD COLUMN school
 if (!ucols.includes('classes')) db.exec("ALTER TABLE users ADD COLUMN classes TEXT NOT NULL DEFAULT '[]'");   // teacher: JSON list of the classes they may see
 const ccols = db.prepare('PRAGMA table_info(courses)').all().map(c => c.name);
 if (!ccols.includes('sequential')) db.exec('ALTER TABLE courses ADD COLUMN sequential INTEGER NOT NULL DEFAULT 0');   // 1 = steps must be completed in order
+/* Enrolment by class and by date (Phase A): every enrolment may carry a start and an end date, and remembers how it was made.
+   Ended enrolments keep their progress and scores for the reports; they just leave the student's dashboard. */
+const ecols = db.prepare('PRAGMA table_info(enrollments)').all().map(c => c.name);
+if (!ecols.includes('starts_on')) db.exec('ALTER TABLE enrollments ADD COLUMN starts_on TEXT');       // YYYY-MM-DD in the school's timezone
+if (!ecols.includes('ends_on')) db.exec('ALTER TABLE enrollments ADD COLUMN ends_on TEXT');
+if (!ecols.includes('source')) db.exec("ALTER TABLE enrollments ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'");   // manual | bulk | scheduled | self
+if (!ecols.includes('batch_id')) db.exec('ALTER TABLE enrollments ADD COLUMN batch_id INTEGER');
+if (!ecols.includes('ended_at')) db.exec('ALTER TABLE enrollments ADD COLUMN ended_at TEXT');
+db.exec(`
+CREATE TABLE IF NOT EXISTS enrollment_batches (          -- one bulk or scheduled enrolment action: "these classes, these courses, from … to …"
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  school_slug   TEXT NOT NULL,
+  classes       TEXT NOT NULL,                            -- JSON list of class names
+  course_ids    TEXT NOT NULL,                            -- JSON list of course ids
+  starts_on     TEXT,                                     -- NULL = at once
+  ends_on       TEXT,                                     -- NULL = no end
+  exclude_user_ids TEXT NOT NULL DEFAULT '[]',            -- students the teacher left out
+  status        TEXT NOT NULL DEFAULT 'pending',          -- pending | active | ended | cancelled
+  note          TEXT,
+  created_by    INTEGER,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  applied_at    TEXT,
+  ended_at      TEXT,
+  extended_from TEXT                                      -- previous ends_on when a subscription was extended
+);
+CREATE TABLE IF NOT EXISTS course_schools (              -- which schools may see and enrol on a course; no rows = every school
+  course_id     INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  school_slug   TEXT NOT NULL,
+  PRIMARY KEY (course_id, school_slug)
+);
+`);
 const scols = db.prepare('PRAGMA table_info(scos)').all().map(c => c.name);
 if (!scols.includes('package')) db.exec("ALTER TABLE scos ADD COLUMN package TEXT");           // sub-folder of the package this SCO came from ('' = course root)
 if (!scols.includes('package_title')) db.exec("ALTER TABLE scos ADD COLUMN package_title TEXT");

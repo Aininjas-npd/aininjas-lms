@@ -1,6 +1,12 @@
 <%- include('../partials/header') %>
 <a href="/admin/courses" class="muted small">← Courses</a>
 <div class="row between wrap"><h1><%= course.title %></h1><span class="actions"><a class="btn small" href="/admin/courses/<%= course.id %>/path"><%= hasPath ? 'Edit learning path' : 'Build learning path' %></a><a class="btn ghost small" href="/admin/courses/<%= course.id %>/export.csv">⬇ Export CSV</a></span></div>
+<div class="card"><form method="post" action="/admin/courses/<%= course.id %>/schools" class="row between wrap" style="gap:10px">
+  <div><h3 style="margin:0 0 4px">Available to</h3><p class="muted small" style="margin:0">Which schools can enrol on this course. Students already enrolled keep their access whatever you pick.</p></div>
+  <div class="row gap"><label class="check"><input type="checkbox" name="everyone" <%= courseSchools.length ? '' : 'checked' %> onchange="document.querySelectorAll('.cs').forEach(c => c.disabled = this.checked)"> Every school</label>
+    <% schools.forEach(s => { %><label class="check"><input type="checkbox" class="cs" name="schools" value="<%= s.slug %>" <%= courseSchools.includes(s.slug) ? 'checked' : '' %> <%= courseSchools.length ? '' : 'disabled' %>> <%= s.name %></label><% }) %>
+    <button class="btn small ghost" type="submit">Save</button></div>
+</form></div>
 <% if (grid && grid.steps.length) { %>
 <div class="card"><h3>Class progress <span class="muted small">— every learner, every step</span></h3>
   <div class="tw"><table class="table gridtbl"><thead><tr><th>Learner</th><% grid.steps.forEach((s, i) => { %><th title="<%= s.title %>"><span class="stepk <%= s.type %>"><%= i + 1 %></span> <%= s.kind %></th><% }) %><th class="num">Done</th></tr></thead><tbody>

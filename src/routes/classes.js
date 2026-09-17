@@ -34,7 +34,10 @@ router.get('/classes', requireStaff, async (req, res) => {
   if (scope.all) db.prepare(`SELECT DISTINCT class_name FROM users WHERE role='learner' AND school_slug=? AND class_name IS NOT NULL AND class_name<>''`).all(scope.school.slug).forEach(r => names.add(r.class_name));
   const cards = [...names].map(n => classesLib.classStats(scope.school.slug, n));
   const unassigned = scope.all ? classesLib.students(scope.school.slug, null).filter(s => !s.user.class_name) : [];
-  res.render('classes/index', { title: 'Classes', sc: scope, cards, unassigned, noSchool: false });
+  /* search: a name or email across every class this person may see */
+  const qtext = String(req.query.q || '').trim();
+  const found = qtext ? classesLib.search(scope, qtext) : null;
+  res.render('classes/index', { title: 'Classes', sc: scope, cards, unassigned, noSchool: false, qtext, found });
 });
 
 /* ---------- staff: one class ---------- */
@@ -42,9 +45,11 @@ router.get('/classes/:name', requireStaff, async (req, res) => {
   const scope = await classesLib.scopeFor(req.user, String(req.query.school || ''));
   const name = req.params.name;
   if (!scope.school || !(scope.all || scope.classes.includes(name))) return res.status(403).render('error', { title: 'Not your class', message: 'You can only see the classes assigned to you.' });
-  const list = classesLib.students(scope.school.slug, name);
-  const courses = q.courses.all().filter(c => c.is_published && list.some(s => s.courses.some(x => x.course_id === c.id)));
-  res.render('classes/class', { title: name, sc: scope, name, list, courses, stats: classesLib.classStats(scope.school.slug, name), canMove: scope.all });
+  const qtext = String(req.query.q || '').trim();
+  const all = classesLib.students(scope.school.slug, name);
+  const list = qtext ? all.filter(s => classesLib.matches(s.user, qtext)) : all;
+  const courses = q.courses.all().filter(c => c.is_published && all.some(s => s.courses.some(x => x.course_id === c.id)));
+  res.render('classes/class', { title: name, sc: scope, name, list, courses, stats: classesLib.classStats(scope.school.slug, name), canMove: scope.all, qtext, totalStudents: all.length });
 });
 
 router.get('/classes/:name/export.csv', requireStaff, async (req, res) => {

@@ -3,8 +3,10 @@
 <p class="small"><a href="/classes<%= qs %>">← Classes</a></p>
 <div class="row between wrap">
   <div><p class="eyebrow"><%= sc.school.name %></p><h1 style="margin-top:4px"><%= name %></h1></div>
-  <span class="actions"><a class="btn ghost small" href="/classes/<%= encodeURIComponent(name) %>/export.csv<%= qs %>">⬇ Export CSV</a></span>
+  <span class="actions"><a class="btn small" href="/classes/<%= encodeURIComponent(name) %>/enroll<%= qs %>">+ Enrol this class in a course</a><a class="btn ghost small" href="/classes/enrolments<%= qs %>">Enrolments</a><a class="btn ghost small" href="/classes/<%= encodeURIComponent(name) %>/export.csv<%= qs %>">⬇ Export CSV</a></span>
 </div>
+<form method="get" action="/classes/<%= encodeURIComponent(name) %>" class="row gap" style="margin:0 0 14px"><% if (user.role === 'admin') { %><input type="hidden" name="school" value="<%= sc.school.slug %>"><% } %>
+  <input type="search" name="q" value="<%= locals.qtext || '' %>" placeholder="Find a student in <%= name %>…" style="max-width:360px" autocomplete="off"><button class="btn small ghost" type="submit">Search</button><% if (locals.qtext) { %><span class="small muted"><%= list.length %> of <%= totalStudents %></span> <a class="small" href="/classes/<%= encodeURIComponent(name) %><%= qs %>">clear</a><% } %></form>
 <div class="stats">
   <div class="card stat"><p class="eyebrow">Students</p><h2 style="margin:0"><%= stats.students %></h2></div>
   <div class="card stat"><p class="eyebrow">Average completion</p><h2 style="margin:0"><%= stats.avgPercent %>%</h2><p class="small muted" style="margin:4px 0 0"><%= stats.completedAll %> finished everything · <%= stats.notStarted %> not started</p></div>

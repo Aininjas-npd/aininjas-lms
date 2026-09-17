@@ -77,4 +77,18 @@ function canSee(user, student) {
   return false;
 }
 
-module.exports = { scopeFor, students, studentSummary, classStats, canSee, parseClasses };
+/** Does this student match a search string? Name, email or class, case-insensitive, every word must match. */
+function matches(u, qtext) {
+  const hay = `${u.name || ''} ${u.email || ''} ${u.class_name || ''}`.toLowerCase();
+  return String(qtext || '').toLowerCase().split(/\s+/).filter(Boolean).every(w => hay.includes(w));
+}
+/** Students in the caller's scope whose name/email/class match. */
+function search(scope, qtext) {
+  if (!scope.school) return [];
+  const rows = scope.all
+    ? db.prepare(`SELECT * FROM users WHERE role='learner' AND status='approved' AND school_slug=? ORDER BY name COLLATE NOCASE`).all(scope.school.slug)
+    : scope.classes.length ? db.prepare(`SELECT * FROM users WHERE role='learner' AND status='approved' AND school_slug=? AND class_name IN (${scope.classes.map(() => '?').join(',')}) ORDER BY name COLLATE NOCASE`).all(scope.school.slug, ...scope.classes) : [];
+  return rows.filter(u => matches(u, qtext)).slice(0, 100).map(u => studentSummary(u));
+}
+
+module.exports = { scopeFor, students, studentSummary, classStats, canSee, parseClasses, matches, search };

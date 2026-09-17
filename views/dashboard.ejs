@@ -23,6 +23,16 @@
   </form>
 </div>
 <% if (!mine.length) { %><p class="muted"><%= catalog.length ? "You're not enrolled in any course yet — pick one below." : "No courses have been assigned to you yet. Your teacher or AI Ninjas will add you to a course; it will appear here." %></p><% } %>
+<% if (locals.ended && ended.length) { %>
+<h2 style="margin-top:24px">Ended courses <span class="muted small">(your progress is saved)</span></h2>
+<div class="grid">
+<% ended.forEach(e => { const s = e.summary; %>
+  <div class="card" style="opacity:.75"><div class="row between"><h3><%= e.title %></h3><span class="badge revoked">ended<%= e.ends_on ? ' ' + e.ends_on : '' %></span></div>
+    <div class="progress"><i style="width:<%= s.percent %>%"></i></div>
+    <p class="small muted"><%= s.done %>/<%= s.total %> steps · <%= s.percent %>%<% if (s.avgScore != null) { %> · avg score <%= s.avgScore %><% } %> — ask your teacher if you need this course again.</p></div>
+<% }) %>
+</div>
+<% } %>
 <% if (catalog.length) { %>
 <h2>Open courses</h2>
 <div class="grid">

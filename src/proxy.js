@@ -55,7 +55,9 @@ function mount(app, { prefix, target, secret, shell, log = console }) {
     }
     up.on('timeout', () => up.destroy(new Error('upstream timeout')));
     up.on('error', err => {
-      log.warn(`[proxy ${prefix}] ${req.method} ${req.originalUrl}: ${err.message}`);
+      /* a connect failure on both IPv6 and IPv4 arrives as an AggregateError with an empty message — show the causes */
+      const why = err.message || (err.errors && err.errors.map(e => e.code || e.message).join(', ')) || err.code || String(err);
+      log.warn(`[proxy ${prefix}] ${req.method} ${req.originalUrl}: ${why}${/ECONNREFUSED/.test(why) ? '  (connection refused — is the upstream listening on that port? check its PORT variable)' : ''}`);
       if (!res.headersSent) res.status(502).type('html').send(unavailable());
       else res.end();
     });

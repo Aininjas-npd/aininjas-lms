@@ -53,3 +53,9 @@ a.card.tile{display:block;color:inherit;text-decoration:none}a.card.tile:hover{b
 .path.compact .act .posbox::-webkit-outer-spin-button,.path.compact .act .posbox::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 @media(max-width:700px){.path.compact .act.actions{justify-content:flex-start}}
 .ordertoast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink-deep);color:#fff;padding:9px 16px;border-radius:var(--r);font-size:13.5px;opacity:0;transition:.18s;pointer-events:none;z-index:50}.ordertoast.show{opacity:1;transform:translateX(-50%)}.ordertoast.err{background:var(--bad)}
+
+
+/* "View as" banner: an administrator is looking at the Academy as someone else */
+.viewing-as{background:#FFB347;color:#1A1311;font-size:14px}
+.viewing-as .wrap{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:8px 0;flex-wrap:wrap}
+.viewing-as form.inline{display:inline}

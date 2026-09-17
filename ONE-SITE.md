@@ -34,8 +34,15 @@ browser ── academy.aininjas.com ──► Academy (Node)
 
 ## Railway setup (one time)
 
-Service names below are placeholders — use the names shown in your Railway project. Private-network hostnames are
-`<service name>.railway.internal`; the port is the one the app listens on (`PORT`), not the public 443.
+Service names below are placeholders — use the names shown in your Railway project (Settings → Networking → Private
+Networking on each service). Two things that bit us on the first rollout:
+
+* Internal URLs must start with `http://` — `aininjas-accounts.railway.internal:5000` on its own is not a URL and is ignored
+  (the Academy logs `[one site] … is not a valid URL`).
+* The port is the one the app actually listens on. Railway injects its own `PORT` (it was 8080 on Accounts) when a service
+  has none set, so either set `PORT=5000` on Accounts and `PORT=4000` on Quiz Studio, or use Railway's number in the
+  internal URL. A mismatch shows up as `[proxy /account] … ECONNREFUSED` in the Academy log and the "That part of the
+  Academy is waking up" page in the browser.
 
 **1. Academy service** — add:
 
@@ -56,6 +63,7 @@ Service names below are placeholders — use the names shown in your Railway pro
 | `ACCOUNTS_INTERNAL_URL` | `http://aininjas-accounts.railway.internal:5000` |
 | `REDIRECT_FROM_HOSTS` | `assessment.aininjas.com` |
 | `ACADEMY_URL` | `https://academy.aininjas.com` (as before) |
+| `PORT` | `4000` (must match the port in the Academy's `QUIZ_STUDIO_INTERNAL_URL`) |
 
 **3. Accounts service** — change / add:
 
@@ -63,6 +71,7 @@ Service names below are placeholders — use the names shown in your Railway pro
 | --- | --- |
 | `BASE_URL` | `https://academy.aininjas.com/account` |
 | `REDIRECT_FROM_HOSTS` | `accounts.aininjas.com` |
+| `PORT` | `5000` (must match the port in the Academy's `ACCOUNTS_INTERNAL_URL`) |
 
 **4. In Accounts → Admin → Apps**, edit the *Quiz Studio* app and set its base URL to
 `https://academy.aininjas.com/assess` (login, callback and sync paths stay `/auth/sso`, `/auth/sso/callback`,

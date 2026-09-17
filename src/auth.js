@@ -38,19 +38,38 @@ function upsertFromSso({ sub, email, name, role, scope }) {
   }
   return q.userById.get(u.id);
 }
+/* A person whose sign-in token named their school but not its slug (older Accounts builds, or an Academy-only grant):
+   find the slug by school name so class views, enrolment and co-branding all work. */
+async function resolveSchoolSlug(u, scope) {
+  if (!u || u.school_slug) return u;
+  const name = String((scope && scope.school_name) || u.organization || '').trim().toLowerCase();
+  if (!name) return u;
+  try {
+    const schools = await require('./brand').listSchools();
+    const sch = schools.find(s => String(s.name || '').trim().toLowerCase() === name);
+    if (sch && sch.slug) { db.prepare('UPDATE users SET school_slug=? WHERE id=?').run(sch.slug, u.id); return q.userById.get(u.id); }
+  } catch {}
+  return u;
+}
 router.get('/auth/sso', (req, res) => {
   if (!sso) return res.redirect('/login');
   res.redirect(sso.authorizeUrl(safeReturn(req.query.return) || req.session.returnTo || '/dashboard'));
 });
-router.get('/auth/sso/callback', (req, res) => {
+router.get('/auth/sso/callback', async (req, res) => {
   if (!sso) return res.redirect('/login');
   try {
     const c = sso.verifyToken(req.query.token);
-    const u = upsertFromSso(c);
-    db.prepare("UPDATE users SET last_login_at=datetime('now') WHERE id=?").run(u.id);
+    const u = await resolveSchoolSlug(upsertFromSso(c), c.scope);
+    /* "View as": Accounts signed this token for an AI Ninjas administrator looking at the Academy as `u`.
+       The session belongs to `u` but carries the administrator, every page shows a banner, and nothing is saved
+       (see the read-only guard in server.js). Their own sign-in time is left untouched. */
+    const actor = c.act && c.act.sub ? { id: String(c.act.sub), name: String(c.act.name || 'AI Ninjas admin'), email: String(c.act.email || ''), since: new Date().toISOString() } : null;
+    if (!actor) db.prepare("UPDATE users SET last_login_at=datetime('now') WHERE id=?").run(u.id);
+    else q.logEvent.run(u.id, null, null, 'viewed_as', JSON.stringify({ by: actor.email || actor.name }));
     req.session.regenerate(() => {
       req.session.userId = u.id;
-      const dest = safeReturn(req.query.return) || homeFor(u);
+      if (actor) req.session.actor = actor;
+      const dest = actor ? homeFor(u) : (safeReturn(req.query.return) || homeFor(u));
       req.session.save(() => res.redirect(dest));
     });
   } catch (e) {
@@ -72,7 +91,7 @@ router.post('/api/sso/sync', express.json({ verify: (req, res, buf) => { req.raw
   try { ev = sso.verifyWebhook(req.rawBody || '', req.headers); } catch (e) { return res.status(401).json({ error: e.message }); }
   const em = String(ev.user && ev.user.email || '').toLowerCase();
   if (!em) return res.status(400).json({ error: 'No user' });
-  if (ev.event === 'grant.updated' && ev.grant && ev.user.status !== 'disabled') { upsertFromSso({ sub: ev.user.id, email: em, name: ev.user.name, role: ev.grant.role, scope: ev.grant.scope }); return res.json({ ok: true, applied: 'updated' }); }
+  if (ev.event === 'grant.updated' && ev.grant && ev.user.status !== 'disabled') { resolveSchoolSlug(upsertFromSso({ sub: ev.user.id, email: em, name: ev.user.name, role: ev.grant.role, scope: ev.grant.scope }), ev.grant.scope); return res.json({ ok: true, applied: 'updated' }); }
   const u = q.userByEmail.get(em);
   if (u) {
     if (u.role === 'admin' && db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin' AND status='approved'").get().n <= 1) return res.json({ ok: true, applied: 'kept-last-admin' });
@@ -87,6 +106,8 @@ router.post('/api/sso/sync', express.json({ verify: (req, res, buf) => { req.raw
 function currentUser(req, res, next) {
   req.user = req.session.userId ? q.userById.get(req.session.userId) : null;
   res.locals.user = req.user;
+  req.actor = req.user && req.session.actor ? req.session.actor : null;   // set when an administrator is "viewing as" this user
+  res.locals.actor = req.actor;
   res.locals.flash = req.session.flash || null;
   delete req.session.flash;
   next();
@@ -113,6 +134,15 @@ function requireAdmin(req, res, next) {
   next();
 }
 function flash(req, type, message) { req.session.flash = { type, message }; }
+/* While an administrator is viewing as someone, nothing may be saved on that person's behalf: every non-GET request
+   (SCORM commits, "Done" buttons, profile edits, enrol requests…) is acknowledged but not applied. */
+function readOnlyWhileViewing(req, res, next) {
+  if (!req.actor || req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  if (['/logout', '/stop-viewing'].includes(req.path)) return next();
+  if (req.path.startsWith('/api/')) return res.json({ ok: true, readonly: true, message: 'Viewing as ' + req.user.name + ' — nothing is saved.' });
+  flash(req, 'info', `You are viewing the Academy as ${req.user.name} — changes are not saved.`);
+  res.redirect(req.get('Referer') || homeFor(req.user));
+}
 
 // ---------- request access / register ----------
 router.get('/request-access', (req, res) => res.render('request-access', { title: 'Request access', values: {} }));
@@ -155,6 +185,13 @@ router.post('/login', (req, res) => {
   res.redirect(user.status === 'approved' ? dest : '/pending');
 });
 
+/* End a "View as" session: back to the person's record in Accounts (their own Accounts sign-in is untouched). */
+router.post('/stop-viewing', (req, res) => {
+  const onesite = require('./onesite');
+  const who = req.user; const actor = req.session.actor;
+  const dest = actor && who && who.sso_sub && onesite.accounts.configured ? `${onesite.accounts.on ? onesite.accounts.prefix : onesite.accounts.public}/admin/users/${encodeURIComponent(who.sso_sub)}` : '/';
+  req.session.destroy(() => res.redirect(dest));
+});
 router.post('/logout', (req, res) => {
   /* one site, one sign-out: also drop the Quiz Studio / Accounts / student cookies that live on this domain */
   const secure = /^https:/i.test(onesite.BASE_URL) ? '; Secure' : '';
@@ -245,9 +282,9 @@ async function syncAllFromAccounts() {
   for (const g of grants) {
     if (g.status === 'disabled') { const u = q.userByEmail.get(String(g.email).toLowerCase()); if (u && u.status !== 'disabled') { db.prepare("UPDATE users SET status='disabled' WHERE id=?").run(u.id); disabled++; } continue; }
     const before = q.userByEmail.get(String(g.email).toLowerCase());
-    upsertFromSso({ sub: g.id, email: g.email, name: g.name, role: g.role, scope: g.scope });
+    await resolveSchoolSlug(upsertFromSso({ sub: g.id, email: g.email, name: g.name, role: g.role, scope: g.scope }), g.scope);
     if (before) updated++; else created++;
   }
   return { total: grants.length, created, updated, disabled };
 }
-module.exports = { router, currentUser, requireLogin, requireAdmin, requireStaff, homeFor, STAFF, flash, upsertFromSso, ssoEnabled: !!sso, accountsUrl: ACCOUNTS_URL, syncAllFromAccounts };
+module.exports = { router, currentUser, readOnlyWhileViewing, requireLogin, requireAdmin, requireStaff, homeFor, STAFF, flash, upsertFromSso, ssoEnabled: !!sso, accountsUrl: ACCOUNTS_URL, syncAllFromAccounts };

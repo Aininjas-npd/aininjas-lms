@@ -32,27 +32,31 @@ router.get('/live', requireLogin, (req, res) => {
   if (!code) { flash(req, 'error', 'Type the code shown on your teacher\'s screen.'); return res.redirect('/dashboard'); }
   if (!pathLib.quizEnabled()) return res.status(404).render('error', { title: 'Not available', message: 'Live quizzes are not set up on this Academy yet.' });
   if (req.user.role !== 'learner') return res.redirect(`${pathLib.QUIZ_URL}/live/${code}`);
-  q.logEvent.run(req.user.id, null, null, 'live_joined', JSON.stringify({ code }));
-  res.redirect(pathLib.liveJoinUrl({ user: req.user, code, baseUrl: baseUrl(req) }));
+  if (!req.actor) q.logEvent.run(req.user.id, null, null, 'live_joined', JSON.stringify({ code }));
+  res.redirect(pathLib.liveJoinUrl({ user: req.user, code, baseUrl: baseUrl(req), actor: req.actor }));
 });
 router.get('/live/:code', requireLogin, (req, res) => res.redirect('/live?code=' + encodeURIComponent(req.params.code)));
 
 router.get('/dashboard', requireLogin, (req, res) => {
-  const enrollments = db.prepare(`SELECT e.*, c.title, c.slug, c.description FROM enrollments e JOIN courses c ON c.id = e.course_id
-                                  WHERE e.user_id = ? ORDER BY e.enrolled_at DESC`).all(req.user.id);
-  const mine = enrollments.map(e => ({ ...e, summary: pathLib.pathSummary(req.user.id, e.course_id) }));
-  const enrolledIds = new Set(enrollments.map(e => e.course_id));
-  // Only courses an admin marked "open enrollment" are offered for self-enrol; everything else is assigned by an admin (Admin → Users → + enroll)
-  const catalog = q.courses.all().filter(c => c.is_published && c.open_enrollment && !enrolledIds.has(c.id));
-  res.render('dashboard', { title: 'My courses', mine, catalog, widgets: plugins.widgets('learnerDashboard', req.user) });
+  /* active enrolments only: a scheduled one shows nothing until its start day, an ended one moves to the list below */
+  const enrolLib = require('../enrol');
+  const mineAll = enrolLib.forStudent(req.user.id);
+  const mine = [...mineAll.active, ...mineAll.requested].map(e => ({ ...e, summary: pathLib.pathSummary(req.user.id, e.course_id) }));
+  const ended = mineAll.ended.map(e => ({ ...e, summary: pathLib.pathSummary(req.user.id, e.course_id) }));
+  const enrolledIds = new Set([...mineAll.active, ...mineAll.requested].map(e => e.course_id));
+  // Only courses an admin marked "open enrollment" — and open to this student's school — are offered for self-enrol
+  const catalog = q.courses.all().filter(c => c.is_published && c.open_enrollment && !enrolledIds.has(c.id) && enrolLib.courseOpenTo(c.id, req.user.school_slug));
+  res.render('dashboard', { title: 'My courses', mine, ended, catalog, widgets: plugins.widgets('learnerDashboard', req.user) });
 });
 
 // Ask for a course (self-enroll if open, otherwise creates a "requested" enrollment for admin approval)
 router.post('/courses/:id/enroll', requireLogin, (req, res) => {
   const course = q.courseById.get(req.params.id);
   if (!course || !course.is_published) return res.status(404).render('error', { title: 'Not found', message: 'Course not found.' });
+  if (!require('../enrol').courseOpenTo(course.id, req.user.school_slug)) return res.status(403).render('error', { title: 'Not available', message: 'This course is not offered to your school.' });
   const existing = q.enrollment.get(req.user.id, course.id);
-  if (existing) { flash(req, 'info', 'You already have a request for this course.'); return res.redirect('/dashboard'); }
+  if (existing && existing.status !== 'ended') { flash(req, 'info', 'You already have a request for this course.'); return res.redirect('/dashboard'); }
+  if (existing) { db.prepare(`UPDATE enrollments SET status=?, ended_at=NULL, ends_on=NULL, batch_id=NULL, source='self', enrolled_at=datetime('now') WHERE id=?`).run(course.open_enrollment ? 'active' : 'requested', existing.id); flash(req, 'success', `Welcome back to "${course.title}".`); return res.redirect('/dashboard'); }
   const status = course.open_enrollment ? 'active' : 'requested';
   db.prepare('INSERT INTO enrollments (user_id, course_id, status) VALUES (?, ?, ?)').run(req.user.id, course.id, status);
   q.logEvent.run(req.user.id, course.id, null, status === 'active' ? 'enroll' : 'enroll_requested', null);
@@ -66,6 +70,7 @@ router.get('/courses/:id', requireLogin, (req, res) => {
   if (!course) return res.status(404).render('error', { title: 'Not found', message: 'Course not found.' });
   const enrollment = q.enrollment.get(req.user.id, course.id);
   if (req.user.role !== 'admin' && (!enrollment || enrollment.status !== 'active')) {
+    if (enrollment && enrollment.status === 'ended') return res.status(403).render('error', { title: 'This course has ended', message: `Your access to "${course.title}" ended${enrollment.ends_on ? ' on ' + enrollment.ends_on : ''}. Your progress is saved — ask your teacher if you need it extended.` });
     return res.status(403).render('error', { title: 'No access', message: 'You are not enrolled in this course yet.' });
   }
   const lp = pathLib.pathSummary(req.user.id, course.id);
@@ -78,7 +83,7 @@ function stepFor(req, res) {
   const course = q.courseById.get(req.params.id);
   if (!course) { res.status(404).render('error', { title: 'Not found', message: 'Course not found.' }); return null; }
   const enrollment = q.enrollment.get(req.user.id, course.id);
-  if (req.user.role !== 'admin' && (!enrollment || enrollment.status !== 'active')) { res.status(403).render('error', { title: 'No access', message: 'You are not enrolled in this course.' }); return null; }
+  if (req.user.role !== 'admin' && (!enrollment || enrollment.status !== 'active')) { res.status(403).render('error', { title: enrollment && enrollment.status === 'ended' ? 'This course has ended' : 'No access', message: enrollment && enrollment.status === 'ended' ? 'Your access to this course has ended. Your progress is saved.' : 'You are not enrolled in this course.' }); return null; }
   const step = pathLib.pathSummary(req.user.id, course.id).steps.find(s => String(s.id) === String(req.params.stepId));
   if (!step) { res.status(404).render('error', { title: 'Not found', message: 'That step no longer exists.' }); return null; }
   if (step.locked && req.user.role !== 'admin') { flash(req, 'error', `Finish "${step.blockedBy ? step.blockedBy.title : 'the previous step'}" first — this course goes in order.`); res.redirect(`/courses/${course.id}`); return null; }
@@ -91,13 +96,13 @@ router.get('/courses/:id/steps/:stepId/go', requireLogin, (req, res) => {
   if (step.type === 'sco') return res.redirect(`/courses/${course.id}/play/${step.config.sco_id}`);
   if (step.type === 'quiz') {
     if (!pathLib.quizEnabled()) return res.status(500).render('error', { title: 'Quiz not available', message: 'Quiz Studio is not connected to the Academy yet (QUIZ_STUDIO_URL / QUIZ_LAUNCH_SECRET).' });
-    pathLib.markStarted(req.user.id, step.id);
-    q.logEvent.run(req.user.id, course.id, null, 'quiz_launched', JSON.stringify({ step_id: step.id, quiz_id: step.config.quiz_id }));
-    return res.redirect(pathLib.launchUrl({ user: req.user, step, course, baseUrl: baseUrl(req) }));
+    if (!req.actor) { pathLib.markStarted(req.user.id, step.id); }
+    if (!req.actor) q.logEvent.run(req.user.id, course.id, null, 'quiz_launched', JSON.stringify({ step_id: step.id, quiz_id: step.config.quiz_id }));
+    return res.redirect(pathLib.launchUrl({ user: req.user, step, course, baseUrl: baseUrl(req), actor: req.actor }));
   }
   if (step.type === 'colab') {
-    pathLib.markStarted(req.user.id, step.id);
-    q.logEvent.run(req.user.id, course.id, null, 'colab_opened', JSON.stringify({ step_id: step.id }));
+    if (!req.actor) { pathLib.markStarted(req.user.id, step.id); }
+    if (!req.actor) q.logEvent.run(req.user.id, course.id, null, 'colab_opened', JSON.stringify({ step_id: step.id }));
     if (step.config.file) return res.redirect(`/courses/${course.id}/steps/${step.id}/notebook`);   // hand them the file
     return res.redirect(step.config.url);
   }
@@ -111,7 +116,7 @@ router.get('/courses/:id/steps/:stepId/notebook', requireLogin, (req, res) => {
   if (step.type !== 'colab' || !step.config.file) return res.status(404).render('error', { title: 'Not found', message: 'This step has no notebook file.' });
   const file = path.join(DATA_DIR, 'notebooks', path.basename(step.config.file));
   if (!require('fs').existsSync(file)) return res.status(404).render('error', { title: 'Not found', message: 'The notebook file is missing — tell your teacher.' });
-  pathLib.markStarted(req.user.id, step.id);
+  if (!req.actor) pathLib.markStarted(req.user.id, step.id);
   res.download(file, step.config.filename || 'notebook.ipynb');
 });
 // Practice step: student marks it done (optionally with their notebook share link)
@@ -153,7 +158,9 @@ router.get('/courses/:id/play/:scoId', requireLogin, (req, res) => {
 
   // Ensure a progress row exists and compute entry mode
   let p = q.progress.get(req.user.id, sco.id);
-  if (!p) {
+  if (req.actor) {                                   // "View as": look, don't touch the student's record
+    p = p || { id: 0, lesson_status: 'not attempted', lesson_location: '', suspend_data: '', score_raw: null, score_min: null, score_max: null, total_time: '0000:00:00.00', exit_mode: '', cmi_json: null, first_launched_at: null, attempts: 0 };
+  } else if (!p) {
     db.prepare(`INSERT INTO sco_progress (user_id, sco_id, first_launched_at, last_accessed_at, attempts) VALUES (?, ?, datetime('now'), datetime('now'), 1)`).run(req.user.id, sco.id);
     p = q.progress.get(req.user.id, sco.id);
   } else {
@@ -169,8 +176,7 @@ router.get('/courses/:id/play/:scoId', requireLogin, (req, res) => {
     objectives: saved.objectives || [], interactions: [], comments: saved.comments || '',
     max_time_allowed: sco.max_time_allowed || '',
   };
-  q.logEvent.run(req.user.id, course.id, sco.id, 'launch', null);
-  plugins.emit('sco:launch', { userId: req.user.id, courseId: course.id, scoId: sco.id });
+  if (!req.actor) { q.logEvent.run(req.user.id, course.id, sco.id, 'launch', null); plugins.emit('sco:launch', { userId: req.user.id, courseId: course.id, scoId: sco.id }); }
 
   // Prev / Next follow the learning path (not just the lesson list), so a Colab or quiz step is never skipped.
   // "Next" is only enabled once this lesson is done (or the course isn't locked / the viewer is an admin).

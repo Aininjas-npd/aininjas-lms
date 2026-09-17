@@ -130,3 +130,29 @@ Quiz Studio and Accounts can be served through the Academy's own domain — `aca
 `academy.aininjas.com/account/…` — with the Academy's menu on every page, so teachers and students see one site.
 Set `QUIZ_STUDIO_INTERNAL_URL` / `ACCOUNTS_INTERNAL_URL` to turn it on; **ONE-SITE.md** has the Railway steps.
 Code: `src/onesite.js` (addresses), `src/proxy.js` (streaming reverse proxy), `src/shell.js` (the shared menu).
+
+## Enrolment by class and by date (Phase A)
+
+* **Bulk enrolment** — Admin → Users → “Enrol a whole class” (`/admin/enroll`), or a class page → “Enrol this class in a
+  course” (`/classes/:name/enroll`, school admins and teachers, limited to their own classes). Pick classes and courses,
+  preview who gets enrolled (untick anyone to leave them out), confirm. Students already on a course are skipped.
+* **Scheduled enrolment** — the same form with a start date and/or an end date. A scheduler (`src/enrol.js`, on boot and
+  every 5 minutes) enrols on the start day and ends access the day after the end date. While a dated enrolment runs,
+  students who join the class later are enrolled automatically. Dates are calendar days in `SCHOOL_TZ`
+  (default `America/New_York`).
+* **Ending keeps everything** — an ended enrolment leaves the student's dashboard (they see it under “Ended courses”)
+  but progress, quiz scores and reports stay. `/classes/enrolments` lists every batch in the caller's scope with
+  Extend (new end date, or bring an ended one back), End now, Change dates (before it starts) and Cancel.
+* **Course availability** — Admin → Courses → course → “Available to”: every school, or a chosen list
+  (`course_schools`). Only those schools' staff and students see the course; anyone already enrolled keeps access.
+* **Search** — Admin → Users has name/email/class search plus school, class and role filters; the Classes page and each
+  class page have a search box, scoped to what that person may see.
+
+## “View as” (AI Ninjas administrator only)
+
+Admin → Users → 👁 View as (or Accounts → Users → person → “View Academy as …”) opens the Academy as that person in a
+new tab, with a banner. Nothing is saved while viewing: SCORM commits, “Done” buttons, quiz attempts and every other
+write are acknowledged but ignored (`readOnlyWhileViewing` in `src/auth.js`), quizzes open in preview mode, and live
+quizzes can't be joined. “Stop viewing” returns you to the person's record in Accounts; because the Academy keeps one
+session per browser, your own Academy tabs show that person too until you stop. Every start is audited in Accounts
+(`impersonate.start`) and logged in the Academy's events (`viewed_as`).

@@ -1,0 +1,69 @@
+<%- include('../partials/header') %>
+<% const qs = sc.school && user.role === 'admin' ? '?school=' + encodeURIComponent(sc.school.slug) : ''; %>
+<p class="small"><a href="<%= lockClass ? '/classes/' + encodeURIComponent(lockClass) + qs : '/classes' + qs %>">← <%= lockClass ? lockClass : 'Classes' %></a></p>
+<div class="row between wrap">
+  <div><p class="eyebrow"><%= sc.school ? sc.school.name : 'Enrol' %></p><h1 style="margin-top:4px"><%= lockClass ? 'Enrol ' + lockClass : 'Enrol students' %></h1>
+    <p class="muted" style="margin:4px 0 0">Pick <%= lockClass ? 'the courses' : 'classes and courses' %>; everyone in those classes is enrolled. Students already on a course are left as they are. Add dates to start later or to end the access on a given day — progress and scores are always kept.</p></div>
+  <span class="actions"><a class="btn ghost small" href="/classes/enrolments<%= qs %>">All enrolments</a></span>
+</div>
+<% if (error) { %><div class="flash error"><%= error %></div><% } %>
+<% if (!sc.school) { %><div class="card"><p class="muted">Add a school in Quiz Studio → Schools first.</p></div><% } else { %>
+<form method="post" action="<%= lockClass ? '/classes/' + encodeURIComponent(lockClass) + '/enroll' + qs : '/admin/enroll' %>" id="enrolform">
+<% if (sc.school && user.role === 'admin') { %><input type="hidden" name="school" value="<%= sc.school.slug %>"><% } %>
+<div class="fg2" style="align-items:start">
+  <div class="card">
+    <% if (user.role === 'admin' && !lockClass && sc.schools.length > 1) { %>
+      <label class="small muted">School</label>
+      <select style="width:auto;margin-bottom:12px" onchange="location.href='/admin/enroll?school='+encodeURIComponent(this.value)"><% sc.schools.forEach(s => { %><option value="<%= s.slug %>" <%= s.slug === sc.school.slug ? 'selected' : '' %>><%= s.name %></option><% }) %></select>
+    <% } %>
+    <h3 style="margin-top:0">1. Classes</h3>
+    <% if (lockClass) { %><p><span class="badge active"><%= lockClass %></span></p><input type="hidden" name="classes" value="<%= lockClass %>">
+    <% } else if (!allowedClasses.length) { %><p class="muted small">No classes yet — they come from Quiz Studio → Schools.</p>
+    <% } else { allowedClasses.forEach(c => { %><label class="check"><input type="checkbox" name="classes" value="<%= c %>" <%= form.classes.includes(c) ? 'checked' : '' %>> <%= c %></label><% }) } %>
+    <h3>2. Courses</h3>
+    <% if (!courses.length) { %><p class="muted small">No course is available to this school yet<%= user.role === 'admin' ? ' — open one to it under Courses → “Available to”.' : '.' %></p>
+    <% } else { courses.forEach(c => { %><label class="check"><input type="checkbox" name="course_ids" value="<%= c.id %>" <%= form.course_ids.includes(c.id) ? 'checked' : '' %>> <%= c.title %></label><% }) } %>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">3. When <span class="muted small">(optional)</span></h3>
+    <div class="fg2">
+      <div><label class="small muted">Starts on</label><input type="date" name="starts_on" value="<%= form.starts_on %>" min="<%= today %>"><p class="hint">Leave empty to enrol right away. Until then students see nothing.</p></div>
+      <div><label class="small muted">Ends on</label><input type="date" name="ends_on" value="<%= form.ends_on %>" min="<%= today %>"><p class="hint">The course leaves their dashboard the day after; progress and scores stay for the reports. You can extend it later.</p></div>
+    </div>
+    <label class="small muted">Note <span class="muted">(shows in the enrolments list)</span></label><input type="text" name="note" maxlength="200" value="<%= form.note %>" placeholder="e.g. Term 1 · Foundations">
+    <p class="hint">Dates are calendar days in <%= tz %>. While a dated enrolment is running, students who join the class later are enrolled automatically.</p>
+    <p class="actions" style="margin-top:14px"><button class="btn" type="submit" name="action" value="preview">Preview who gets enrolled</button></p>
+  </div>
+</div>
+<% if (preview) { %>
+<div class="card">
+  <h3 style="margin-top:0">Preview</h3>
+  <% if (!preview.students.length) { %><p class="muted">No students found in <%= form.classes.join(', ') %>.</p><% } else { %>
+  <table class="table"><thead><tr><th>Course</th><th class="num">Will be enrolled</th><th class="num">Already enrolled</th><th class="num">Re-activated</th></tr></thead><tbody>
+  <% preview.perCourse.forEach(p => { %><tr><td><%= p.course.title %></td><td class="num"><b><%= p.enrol %></b></td><td class="num"><%= p.already %></td><td class="num"><%= p.reactivate %></td></tr><% }) %>
+  </tbody></table>
+  <p class="small muted" style="margin:10px 0 4px"><%= preview.students.length %> student<%= preview.students.length === 1 ? '' : 's' %> in <%= form.classes.join(', ') %>. Untick anyone to leave them out.</p>
+  <div style="columns:2;column-gap:24px">
+  <% preview.students.forEach(s => { %><label class="check" style="display:flex"><input type="checkbox" name="include" value="<%= s.id %>" checked onchange="toggleExclude(this)"> <%= s.name %> <span class="muted small">· <%= s.class_name %></span></label><% }) %>
+  </div>
+  <div id="excludes"><% form.exclude.forEach(id => { if (!preview.students.some(s => s.id === id)) return; %><input type="hidden" name="exclude" value="<%= id %>"><% }) %></div>
+  <p class="actions" style="margin-top:14px">
+    <button class="btn ok" type="submit" name="action" value="enrol"><%= form.starts_on && form.starts_on > today ? 'Schedule this enrolment' : 'Enrol now' %></button>
+    <span class="muted small"><%= form.starts_on && form.starts_on > today ? 'Nothing happens until ' + form.starts_on + '.' : (preview.toEnrol + preview.reactivate) + ' enrolment' + (preview.toEnrol + preview.reactivate === 1 ? '' : 's') + ' will be created' + (form.ends_on ? ', ending ' + form.ends_on : '') + '.' %></span>
+  </p>
+  <% } %>
+</div>
+<script>
+  // students unticked in the preview are sent as `exclude`; the preview list itself isn't posted
+  function toggleExclude(cb) {
+    var box = document.getElementById('excludes');
+    var cur = box.querySelector('input[value="' + cb.value + '"]');
+    if (!cb.checked && !cur) { var h = document.createElement('input'); h.type = 'hidden'; h.name = 'exclude'; h.value = cb.value; box.appendChild(h); }
+    if (cb.checked && cur) cur.remove();
+  }
+  document.querySelectorAll('input[name=include]').forEach(function (cb) { if (document.querySelector('#excludes input[value="' + cb.value + '"]')) cb.checked = false; cb.name = 'include_ui'; });
+</script>
+<% } %>
+</form>
+<% } %>
+<%- include('../partials/footer') %>

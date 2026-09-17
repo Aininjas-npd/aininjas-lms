@@ -93,7 +93,7 @@ router.post('/courses/:id/toggle', (req, res) => {
 router.post('/courses/:id/delete', (req, res) => { deleteCourse(req.params.id); flash(req, 'success', 'Course deleted.'); res.redirect('/admin/courses'); });
 
 // Course report: every enrolled learner and their per-SCO progress
-router.get('/courses/:id', (req, res) => {
+router.get('/courses/:id', async (req, res) => {
   req.grid = pathLib.classGrid(+req.params.id);
   const course = q.courseById.get(req.params.id);
   if (!course) return res.status(404).render('error', { title: 'Not found', message: 'Course not found.' });
@@ -107,7 +107,9 @@ router.get('/courses/:id', (req, res) => {
     return { ...s, ...r };
   });
   const allUsers = db.prepare(`SELECT id, name, email FROM users WHERE status='approved' AND id NOT IN (SELECT user_id FROM enrollments WHERE course_id=?) ORDER BY name`).all(course.id);
-  res.render('admin/course', { title: course.title, course, scos, learners, heat, allUsers, grid: req.grid, hasPath: pathLib.hasCustomPath(course.id) });
+  const enrol = require('../enrol');
+  res.render('admin/course', { title: course.title, course, scos, learners, heat, allUsers, grid: req.grid, hasPath: pathLib.hasCustomPath(course.id),
+    schools: await brand.listSchools(), courseSchools: enrol.schoolsForCourse(course.id) });
 });
 
 // ---- Learning path builder ----
@@ -228,9 +230,17 @@ router.post('/users/sync-accounts', async (req, res) => {
 });
 router.get('/users', async (req, res) => {
   const filter = req.query.status || 'all';
-  const users = db.prepare(`SELECT * FROM users ${filter === 'all' ? '' : 'WHERE status = @s'} ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC`).all({ s: filter })
-    .map(u => ({ ...u, enrollments: db.prepare(`SELECT e.*, c.title FROM enrollments e JOIN courses c ON c.id=e.course_id WHERE e.user_id=?`).all(u.id) }));
-  res.render('admin/users', { title: 'Users & access requests', users, filter, courses: q.courses.all(), autoApprove: q.getSetting.get('auto_approve')?.value === '1', schools: await brand.listSchools() });
+  const qtext = String(req.query.q || '').trim(), fSchool = String(req.query.school || ''), fClass = String(req.query.class || ''), fRole = String(req.query.role || '');
+  let users = db.prepare(`SELECT * FROM users ${filter === 'all' ? '' : 'WHERE status = @s'} ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC`).all({ s: filter });
+  if (qtext) users = users.filter(u => require('../classes').matches(u, qtext));
+  if (fSchool) users = users.filter(u => u.school_slug === fSchool);
+  if (fClass) users = users.filter(u => u.class_name === fClass || (u.role === 'teacher' && require('../classes').parseClasses(u).includes(fClass)));
+  if (fRole) users = users.filter(u => u.role === fRole);
+  const total = users.length;
+  users = users.slice(0, 300).map(u => ({ ...u, enrollments: db.prepare(`SELECT e.*, c.title FROM enrollments e JOIN courses c ON c.id=e.course_id WHERE e.user_id=?`).all(u.id) }));
+  const schools = await brand.listSchools();
+  const classOptions = fSchool ? ((schools.find(s => s.slug === fSchool) || {}).classes || []) : [...new Set(schools.flatMap(s => s.classes || []))];
+  res.render('admin/users', { title: 'Users & access requests', users, total, filter, qtext, fSchool, fClass, fRole, classOptions, courses: q.courses.all(), autoApprove: q.getSetting.get('auto_approve')?.value === '1', schools });
 });
 /* school co-branding: which school a learner belongs to (drives their logo/accent and the quiz launch) */
 router.post('/users/:id/school', (req, res) => {

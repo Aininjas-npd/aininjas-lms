@@ -1,0 +1,40 @@
+<%- include('../partials/header') %>
+<% const qs = sc.school && user.role === 'admin' ? '?school=' + encodeURIComponent(sc.school.slug) : ''; const fmt = t => t ? String(t).slice(0, 10) : '—'; %>
+<p class="small"><a href="/classes<%= qs %>">← Classes</a></p>
+<div class="row between wrap">
+  <div><p class="eyebrow"><%= sc.school ? sc.school.name : 'Enrolments' %></p><h1 style="margin-top:4px">Enrolments</h1>
+    <p class="muted" style="margin:4px 0 0">Every class enrolment you can see — upcoming, running and ended. Ending keeps students' progress; extending brings an ended one back.</p></div>
+  <span class="actions">
+    <% if (user.role === 'admin' && sc.schools.length > 1) { %><form method="get" action="/classes/enrolments" class="inline"><select name="school" style="width:auto" onchange="this.form.submit()"><% sc.schools.forEach(s => { %><option value="<%= s.slug %>" <%= sc.school && s.slug === sc.school.slug ? 'selected' : '' %>><%= s.name %></option><% }) %></select></form><% } %>
+    <% if (user.role === 'admin') { %><a class="btn small" href="/admin/enroll<%= qs %>">+ Enrol students</a><% } else if (sc.classes.length === 1) { %><a class="btn small" href="/classes/<%= encodeURIComponent(sc.classes[0]) %>/enroll">+ Enrol <%= sc.classes[0] %></a><% } %>
+  </span>
+</div>
+<% if (!batches.length) { %>
+<div class="card"><h3>Nothing yet</h3><p class="muted">Enrol a class from its page<%= user.role === 'admin' ? ', or from Enrol students above' : '' %>. Enrolments made one student at a time (Admin → Users) don't appear here.</p></div>
+<% } else { %>
+<div class="card"><div class="tw"><table class="table"><thead><tr><th>Status</th><th>Classes</th><th>Courses</th><th>Starts</th><th>Ends</th><th class="num">Students</th><th>By</th><th></th></tr></thead><tbody>
+<% batches.forEach(b => { const badge = { pending: 'pending', active: 'active', ended: 'completed', cancelled: 'revoked' }[b.status] || b.status; const label = { pending: 'starts ' + b.starts_on, active: 'running', ended: 'ended', cancelled: 'cancelled' }[b.status]; %>
+  <tr>
+    <td><span class="badge <%= badge %>"><%= label %></span><% if (b.note) { %><br><span class="muted small"><%= b.note %></span><% } %></td>
+    <td><%= b.classes.join(', ') %></td>
+    <td class="small"><%= b.courses.map(c => c.title).join(', ') || '—' %></td>
+    <td class="small"><%= b.starts_on || fmt(b.applied_at || b.created_at) %></td>
+    <td class="small"><%= b.ends_on || '—' %><% if (b.extended_from) { %><br><span class="muted">was <%= b.extended_from %></span><% } %></td>
+    <td class="num"><% if (b.status === 'pending') { %><span class="muted"><%= b.covered %> in class</span><% } else { %><b><%= b.active %></b> active<% if (b.status === 'active' && b.active < b.covered) { %><br><span class="muted small"><%= b.covered - b.active %> already enrolled elsewhere</span><% } %><% if (b.ended) { %><br><span class="muted small"><%= b.ended %> ended</span><% } %><% } %></td>
+    <td class="small muted"><%= b.creator || '—' %><br><%= fmt(b.created_at) %></td>
+    <td class="actions" style="white-space:nowrap">
+      <% if (b.status === 'pending') { %>
+        <details><summary class="btn small ghost" style="display:inline-block">Change dates</summary>
+          <form method="post" action="/classes/enrolments/<%= b.id %>/reschedule" class="row gap" style="margin-top:8px"><input type="date" name="starts_on" value="<%= b.starts_on || '' %>" min="<%= today %>" style="width:auto"><input type="date" name="ends_on" value="<%= b.ends_on || '' %>" min="<%= today %>" style="width:auto"><button class="btn small">Save</button></form></details>
+        <form method="post" action="/classes/enrolments/<%= b.id %>/cancel" class="inline" onsubmit="return confirm('Cancel this scheduled enrolment?')"><button class="link small">cancel</button></form>
+      <% } else if (b.status === 'active' || b.status === 'ended') { %>
+        <details><summary class="btn small ghost" style="display:inline-block"><%= b.status === 'ended' ? 'Extend / bring back' : 'Extend' %></summary>
+          <form method="post" action="/classes/enrolments/<%= b.id %>/extend" class="row gap" style="margin-top:8px"><input type="date" name="ends_on" value="<%= b.ends_on || '' %>" min="<%= today %>" style="width:auto"><button class="btn small">Save</button><span class="muted small">empty = no end date</span></form></details>
+        <% if (b.status === 'active') { %><form method="post" action="/classes/enrolments/<%= b.id %>/cancel" class="inline" onsubmit="return confirm('End this enrolment now for every student in it? Their progress is kept.')"><button class="link small">end now</button></form><% } %>
+      <% } %>
+    </td>
+  </tr>
+<% }) %>
+</tbody></table></div></div>
+<% } %>
+<%- include('../partials/footer') %>

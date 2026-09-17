@@ -28,6 +28,7 @@ app.use(session({
   cookie: { httpOnly: true, sameSite: 'lax', secure: 'auto', maxAge: 30 * 24 * 3600 * 1000 },
 }));
 app.use(auth.currentUser);
+app.use(auth.readOnlyWhileViewing);              // "View as": an administrator looking through someone's eyes can't save anything
 app.use(brand.context);                          // school co-branding: res.locals.brand / brandCss
 
 app.use((req, res, next) => {                    // template globals
@@ -36,8 +37,10 @@ app.use((req, res, next) => {                    // template globals
   res.locals.pluginNav = plugins.nav(req.user?.role === 'admin');
   res.locals.path = req.path;
   res.locals.ssoEnabled = auth.ssoEnabled; res.locals.accountsUrl = auth.accountsUrl;
-  res.locals.shellNav = shell.navFor(req.user, req.path, res.locals.pluginNav);
-  res.locals.accountHref = req.user && req.user.sso_sub && onesite.accounts.configured ? (onesite.accounts.on ? onesite.accounts.prefix + '/' : onesite.accounts.public + '/') : null;
+  res.locals.shellNav = shell.navFor(req.user, req.path, res.locals.pluginNav, !!req.actor);
+  res.locals.accountsBase = onesite.accounts.configured ? (onesite.accounts.on ? onesite.accounts.prefix : onesite.accounts.public) : null;   // "/account" in one-site mode
+  res.locals.ssoAppSlug = process.env.SSO_APP_SLUG || 'lms';
+  res.locals.accountHref = req.user && !req.actor && req.user.sso_sub && res.locals.accountsBase ? res.locals.accountsBase + '/' : null;
   next();
 });
 
@@ -58,11 +61,14 @@ plugins.load(app, {
 
 app.use(auth.router);
 app.use(require('./src/routes/learner'));
+app.use(require('./src/routes/enrol'));     // bulk + scheduled enrolment, course availability (before classes: /classes/enrolments beats /classes/:name)
 app.use(require('./src/routes/classes'));   // teacher / school-admin class views + student class picker
 app.use('/admin', require('./src/routes/admin'));
 
 app.use((req, res) => res.status(404).render('error', { title: 'Not found', message: 'Page not found.' }));
 app.use((err, req, res, next) => { console.error(err); res.status(500).render('error', { title: 'Error', message: err.message }); });
+
+require('./src/enrol').start();                  // scheduled enrolments: apply on their start day, end the day after their end date
 
 app.listen(PORT, () => {
   console.log(`AI Ninjas LMS running at ${process.env.BASE_URL}  (data dir: ${DATA_DIR})`);

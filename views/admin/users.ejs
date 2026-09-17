@@ -2,7 +2,18 @@
 <div class="row between wrap"><h1>Users & access requests</h1>
   <form method="post" action="/admin/settings" class="row gap"><label class="check" style="margin:0"><input type="checkbox" name="auto_approve" <%= autoApprove ? 'checked' : '' %> onchange="this.form.submit()"> Auto-approve new sign-ups</label></form></div>
 <% if (ssoEnabled) { %><div class="flash" style="border-color:var(--steel);background:var(--steel-soft);color:var(--steel)"><div class="row between"><span>Logins are managed in <b>AI Ninjas Accounts</b>. Anyone given Academy access there appears here at once — you can enroll them before they've signed in. If someone is missing, pull the full list.</span><span class="actions"><form method="post" action="/admin/users/sync-accounts" class="inline"><button class="btn small btn-s" type="submit">Sync from Accounts</button></form><a class="btn small ghost" href="<%= accountsUrl %>/admin/users" target="_blank" rel="noopener">Open Accounts →</a></span></div></div><% } %>
-<p class="actions"><% ['all','pending','approved','rejected','disabled'].forEach(f => { %><a class="btn small <%= filter === f ? '' : 'ghost' %>" href="/admin/users?status=<%= f %>"><%= f %></a><% }) %></p>
+<% const keep = { status: filter, q: qtext, school: fSchool, class: fClass, role: fRole }; const qsWith = o => '?' + Object.entries({ ...keep, ...o }).filter(([k, v]) => v && v !== 'all').map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&'); %>
+<p class="actions"><% ['all','pending','approved','rejected','disabled'].forEach(f => { %><a class="btn small <%= filter === f ? '' : 'ghost' %>" href="/admin/users<%= qsWith({ status: f }) %>"><%= f %></a><% }) %></p>
+<form method="get" action="/admin/users" class="row gap" style="margin:0 0 14px"><input type="hidden" name="status" value="<%= filter %>">
+  <input type="search" name="q" value="<%= qtext %>" placeholder="Name, email or class…" style="max-width:300px" autocomplete="off">
+  <select name="school" style="width:auto" onchange="this.form.submit()"><option value="">Any school</option><% schools.forEach(s => { %><option value="<%= s.slug %>" <%= fSchool === s.slug ? 'selected' : '' %>><%= s.name %></option><% }) %></select>
+  <select name="class" style="width:auto" onchange="this.form.submit()"><option value="">Any class</option><% classOptions.forEach(c => { %><option value="<%= c %>" <%= fClass === c ? 'selected' : '' %>><%= c %></option><% }) %></select>
+  <select name="role" style="width:auto" onchange="this.form.submit()"><option value="">Any role</option><% [['learner','Students'],['teacher','Teachers'],['school_admin','School admins'],['admin','Administrators']].forEach(([v, l]) => { %><option value="<%= v %>" <%= fRole === v ? 'selected' : '' %>><%= l %></option><% }) %></select>
+  <button class="btn small ghost" type="submit">Search</button>
+  <span class="small muted"><%= total %> match<%= total === 1 ? '' : 'es' %><%= total > 300 ? ' (showing 300)' : '' %></span>
+  <% if (qtext || fSchool || fClass || fRole) { %><a class="small" href="/admin/users?status=<%= filter %>">clear</a><% } %>
+  <a class="btn small" href="/admin/enroll" style="margin-left:auto">+ Enrol a whole class</a>
+</form>
 <table class="table"><thead><tr><th>User</th><th>School</th><th>Status</th><th>Courses</th><th>Actions</th></tr></thead><tbody>
 <% users.forEach(u => { %>
   <tr><td><strong><%= u.name %></strong> <% if (u.role !== 'learner') { %><span class="badge"><%= { admin: 'admin', school_admin: 'school admin', teacher: 'teacher' }[u.role] %></span><% } %><% if (u.role === 'learner' && u.class_name) { %><span class="muted small"> · <%= u.class_name %></span><% } %><br><span class="muted small"><%= u.email %><%= u.google_id ? ' · Google' : '' %><%= u.sso_sub ? ' · AI Ninjas account' : '' %> · joined <%= u.created_at.slice(0,10) %></span><% if (u.sso_sub && !u.last_login_at) { %><br><span class="badge pending">not signed in yet</span><% } else if (u.last_login_at) { %><br><span class="muted small">last sign-in <%= u.last_login_at.slice(0,10) %></span><% } %></td>
@@ -21,6 +32,7 @@
       <form method="post" action="/admin/enrollments" class="row gap" style="margin-top:4px"><input type="hidden" name="user_id" value="<%= u.id %>">
         <select name="course_id" style="width:auto"><% courses.forEach(c => { %><option value="<%= c.id %>"><%= c.title %></option><% }) %></select><button class="btn small ghost">+ enroll</button></form></td>
     <td class="actions">
+      <% if (u.sso_sub && u.role !== 'admin' && u.status === 'approved' && u.id !== user.id && locals.accountsBase) { %><form method="post" action="<%= accountsBase %>/admin/users/<%= u.sso_sub %>/view-as/<%= ssoAppSlug %>" target="_blank"><button class="btn small ghost" type="submit" title="Open the Academy as this person in a new tab — read-only">👁 View as</button></form><% } %>
       <% if (u.status === 'pending') { %><form method="post" action="/admin/users/<%= u.id %>/approve"><button class="btn small ok">Approve</button></form><form method="post" action="/admin/users/<%= u.id %>/reject"><button class="btn small danger">Reject</button></form><% } %>
       <% if (u.status === 'approved' && u.id !== user.id) { %><form method="post" action="/admin/users/<%= u.id %>/disable"><button class="btn small ghost">Disable</button></form><% } %>
       <% if (['disabled','rejected'].includes(u.status)) { %><form method="post" action="/admin/users/<%= u.id %>/enable"><button class="btn small ghost">Re-enable</button></form><% } %>
