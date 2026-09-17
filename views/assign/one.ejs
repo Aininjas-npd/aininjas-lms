@@ -1,0 +1,45 @@
+<%- include('../partials/header') %>
+<% const overdue = a.due_at && a.due_at < now; const fmt = t => t ? String(t).slice(0, 16).replace('T', ' ') : ''; %>
+<p class="small"><a href="/assignments">← Assignments</a></p>
+<div class="row between wrap">
+  <div><p class="eyebrow"><%= a.kind_label %><%= a.teacher ? ' · ' + a.teacher : '' %></p><h1 style="margin-top:4px"><%= a.title %></h1>
+    <p class="muted" style="margin:4px 0 0"><%= a.total %> points<% if (a.due_at) { %> · due <%= a.due_label %><% } %> <% if (overdue && !st.allDone) { %><span class="badge bad">overdue</span><% } else if (st.allDone) { %><span class="badge good">handed in</span><% } %></p></div>
+  <% if (a.released && st.total != null) { %><div class="card stat" style="margin:0;min-width:140px;text-align:center"><p class="eyebrow">Your mark</p><h2 style="margin:0"><%= st.total %><span class="muted" style="font-size:16px">/<%= a.total %></span></h2></div><% } %>
+</div>
+<% if (locals.justDone) { %><div class="flash success">“<%= justDone.title %>” received.</div><% } %>
+<% if (a.instructions) { %><div class="card"><p style="margin:0;white-space:pre-wrap"><%= a.instructions %></p></div><% } %>
+<% if (a.released && st.comment) { %><div class="card" style="border-left:3px solid var(--ember)"><p class="eyebrow" style="margin:0 0 6px">From your teacher</p><p style="margin:0;white-space:pre-wrap"><%= st.comment %></p></div><% } %>
+
+<% st.items.forEach((it, i) => { const s = it.sub; %>
+<div class="card">
+  <div class="row between wrap">
+    <div class="grow">
+      <p class="eyebrow" style="margin:0"><%= i + 1 %>. <%= it.type_label %><% if (it.course) { %> · <%= it.course.title %><% } %> · <%= it.points %> points</p>
+      <h3 style="margin:4px 0"><%= it.title %></h3>
+      <% if (it.part_note) { %><p style="margin:0 0 4px"><b>Do:</b> <%= it.part_note %></p><% } %>
+      <% if (it.modules) { %><p class="small muted" style="margin:0">Modules: <%= it.modules.join(', ') %></p><% } %>
+      <% if (it.type === 'sco' && it.evidence) { %><p class="small muted" style="margin:4px 0 0">Lesson status: <%= it.evidence.status %><%= it.evidence.score != null ? ' · score ' + it.evidence.score : '' %></p><% } %>
+      <% if (it.type === 'quiz' && s.auto_score != null) { %><p class="small" style="margin:4px 0 0">Your quiz result: <b><%= s.auto_score %>/<%= s.auto_max %></b><% try { const c = JSON.parse(s.launch_ctx || '{}'); if (c.belt) { %> · <%= c.belt %><% } } catch (e) {} %></p><% } %>
+      <% if (s.notebook_url) { %><p class="small" style="margin:4px 0 0">Your notebook: <a href="<%= s.notebook_url %>" target="_blank" rel="noopener"><%= s.notebook_url.slice(0, 60) %>…</a></p><% } %>
+      <% if (s.note) { %><p class="small muted" style="margin:4px 0 0">Your note: <%= s.note %></p><% } %>
+      <% if (a.released && it.score != null) { %><p class="small" style="margin:6px 0 0"><b>Mark: <%= it.score %>/<%= it.points %></b></p><% } %>
+    </div>
+    <div style="text-align:right;min-width:200px">
+      <% if (it.done) { %><span class="badge good"><%= s.status === 'graded' ? 'graded' : 'handed in' %></span><% if (s.submitted_at) { %><br><span class="muted small"><%= fmt(s.submitted_at) %></span><% } %><% } else if (s.status === 'in_progress') { %><span class="badge pending">started</span><% } %>
+      <% if (!it.enrolled) { %><p class="small muted" style="margin:6px 0 0">You're not enrolled in this course — ask your teacher.</p><% } else { %>
+      <div class="actions" style="justify-content:flex-end;margin-top:8px">
+        <% if (it.type === 'quiz') { %><a class="btn small<%= it.done ? ' ghost' : '' %>" href="/assignments/<%= a.id %>/items/<%= it.id %>/go"><%= it.done ? 'Try again' : (s.status === 'in_progress' ? 'Continue quiz' : 'Start quiz') %></a>
+        <% } else if (it.type === 'sco') { %><a class="btn small ghost" href="/assignments/<%= a.id %>/items/<%= it.id %>/go">Open lesson</a>
+          <% if (!it.done) { %><form method="post" action="/assignments/<%= a.id %>/items/<%= it.id %>/done" class="inline"><button class="btn small">Mark done</button></form><% } %>
+        <% } else if (it.type === 'colab') { %><a class="btn small ghost" href="/assignments/<%= a.id %>/items/<%= it.id %>/go" target="_blank" rel="noopener">Open notebook ↗</a>
+          <% if (!it.done) { %><details><summary class="btn small" style="display:inline-block">Hand in</summary><form method="post" action="/assignments/<%= a.id %>/items/<%= it.id %>/done" style="margin-top:8px;text-align:left"><label class="small">Link to your notebook<input name="notebook_url" placeholder="https://colab.research.google.com/…"></label><button class="btn small" style="margin-top:6px">Hand in</button></form></details><% } %>
+        <% } else { %>
+          <% if (!it.done) { %><details><summary class="btn small" style="display:inline-block">Mark done</summary><form method="post" action="/assignments/<%= a.id %>/items/<%= it.id %>/done" style="margin-top:8px;text-align:left"><label class="small">Note to your teacher (optional)<textarea name="note" maxlength="1000" style="min-height:60px"></textarea></label><button class="btn small" style="margin-top:6px">Mark done</button></form></details><% } %>
+        <% } %>
+      </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+<% }) %>
+<%- include('../partials/footer') %>

@@ -12,6 +12,7 @@ function navFor(user, path = '', pluginNav = [], viewing = false) {
   const staff = STAFF.includes(user.role);
   const on = (test) => typeof test === 'function' ? test(path) : path === test;
   if (user.role === 'learner' || user.role === 'admin') items.push({ href: '/dashboard', label: 'My courses', on: on('/dashboard') });
+  if (user.role === 'learner') items.push({ href: '/assignments', label: 'Assignments', on: on(p => p.startsWith('/assignments')) });
   if (staff) items.push({ href: '/classes', label: user.role === 'teacher' ? 'My classes' : 'Classes', on: on(p => p.startsWith('/classes') || p.startsWith('/students')) });
   for (const n of pluginNav) items.push({ href: n.href, label: n.label, on: on(p => p.startsWith(n.href)) });
   if (staff && onesite.quiz.configured && !viewing) items.push({ href: onesite.quiz.on ? onesite.quiz.prefix + '/admin' : onesite.quiz.public + '/admin', label: 'Assessments', on: on(p => p.startsWith(onesite.quiz.prefix + '/') || p === onesite.quiz.prefix) });

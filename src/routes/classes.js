@@ -81,7 +81,9 @@ router.get('/students/:id', requireStaff, async (req, res) => {
   if (!u || !classesLib.canSee(req.user, u)) return res.status(403).render('error', { title: 'Not your student', message: 'You can only see students in your classes.' });
   const [s] = await classesLib.withOutside(u.school_slug, [classesLib.studentSummary(u)]);
   const scope = await classesLib.scopeFor(req.user, u.school_slug || '');
-  res.render('classes/student', { title: u.name, s, sc: scope, quizUrl: pathLib.QUIZ_URL, outsideCounts: require('../quizpull').COUNTS });
+  const assign = require('../assign');
+  const assignments = u.class_name ? assign.listFor(u.school_slug, u.class_name, { includeDrafts: false }).map(a => ({ ...a, mine: assign.statusFor(a, u.id) })) : [];
+  res.render('classes/student', { title: u.name, s, sc: scope, quizUrl: pathLib.QUIZ_URL, outsideCounts: require('../quizpull').COUNTS, assignments });
 });
 
 /* ---------- school admins / AI Ninjas admins: move a student to another class ---------- */

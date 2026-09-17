@@ -168,3 +168,27 @@ session per browser, your own Academy tabs show that person too until you stop. 
   `GET /api/sso/attempts?school=` with the launch secret, cached a minute), matched by the student's Academy id or by
   name + class, shown as "+n outside" on the class page and as a table on the student page, and listed in the CSV.
   They are **not** counted in the quiz average unless `QUIZ_OUTSIDE_COUNTS=1`.
+
+## Assignments and the gradebook (Phase C)
+
+Teachers (and school admins / AI Ninjas admins) set work for a class from **Classes → a class → Assignments**. An assignment is a
+list of items, each worth points:
+
+- a **lesson, quiz or notebook step** of any course the class is enrolled on (with an optional part note such as
+  "sections 2–4" — SCORM cannot enforce a part, so the student marks it done and the teacher confirms when grading);
+- a **standalone Quiz Studio quiz**, optionally limited to some of its modules — the player then shows only those and the
+  score is out of those items only;
+- a **standalone Colab link**; or
+- **anything else** the student marks done with a note.
+
+Kinds: *homework*, *classwork* (a quick gradebook column, added straight from the gradebook) and *unit test* (one quiz —
+sit it normally or through a Quiz Studio **Live** session; live results fill the test automatically). Save as draft or
+publish with a due date; publishing gives every student in the class a submission row (late joiners get theirs on first
+view). Students see **Assignments** in their menu and a "to do" box on the dashboard; each item opens through the normal
+launch routes. Quiz items launch with `assignment_item_id` (and the module list) in the signed token and Quiz Studio echoes
+it in the postback, so the score lands on the submission, scaled to the item's points. Everything else is graded by hand.
+
+Grading happens on the assignment page (per student, per item, with a comment) or in the **Gradebook** (students × every
+published item, inline entry, CSV export). Auto quiz marks show in italics and can be overridden; both values are kept.
+Students see marks and comments only once the teacher **releases** them (spec default). Tables: `assignments`,
+`assignment_items`, `assignment_submissions`, `grades`.

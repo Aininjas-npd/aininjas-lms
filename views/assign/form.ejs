@@ -1,0 +1,95 @@
+<%- include('../partials/header') %>
+<% const editing = !!a; const locked = editing && a.published; const due = editing && a.due_at ? a.due_at.split('T') : ['', '']; %>
+<p class="small"><a href="<%= ctx.base %>/assignments<%= ctx.qs %>">← Assignments</a></p>
+<div class="row between wrap">
+  <div><p class="eyebrow"><%= ctx.scope.school.name %> · <%= ctx.name %></p><h1 style="margin-top:4px"><%= editing ? 'Edit assignment' : (kind === 'unit_test' ? 'New unit test' : 'New assignment') %></h1></div>
+</div>
+<form method="post" action="<%= editing ? ctx.base + '/assignments/' + a.id + '/edit' : ctx.base + '/assignments' %>" id="af">
+  <% if (ctx.qs) { %><input type="hidden" name="school" value="<%= ctx.scope.school.slug %>"><% } %>
+  <input type="hidden" name="items_json" id="items_json">
+  <div class="card">
+    <div class="row gap wrap">
+      <label class="grow">Title<input name="title" required maxlength="200" value="<%= editing ? a.title : '' %>" placeholder="e.g. Week 3 homework — Loops"></label>
+      <label>Kind<select name="kind" style="width:auto"><% Object.entries({ homework: 'Homework', classwork: 'Classwork', unit_test: 'Unit test' }).forEach(([k, v]) => { %><option value="<%= k %>" <%= (editing ? a.kind : kind) === k ? 'selected' : '' %>><%= v %></option><% }) %></select></label>
+      <label>Due<span class="row gap" style="gap:6px"><input type="date" id="due_d" value="<%= due[0] %>" style="width:auto"><input type="time" id="due_t" value="<%= due[1] && due[1] !== '23:59' ? due[1] : '' %>" style="width:auto"></span><input type="hidden" name="due_at" id="due_at"></label>
+    </div>
+    <label>Instructions <span class="muted small">(optional — students see this)</span><textarea name="instructions" maxlength="4000" placeholder="What to do, what to hand in, anything to keep in mind…"><%= editing ? (a.instructions || '') : '' %></textarea></label>
+  </div>
+
+  <div class="card">
+    <h2>Items <span class="muted small">— what the student must do; each has points</span></h2>
+    <% if (locked) { %><p class="muted small">This assignment is published, so its items are fixed (students already have submissions against them). Take it back to draft to change them.</p><% } %>
+    <div class="tw"><table class="table" id="items"><thead><tr><th style="width:26px"></th><th>Type</th><th>What</th><th>Part / note <span class="muted small">(“sections 2–4”)</span></th><th class="num" style="width:90px">Points</th><th style="width:70px"></th></tr></thead><tbody></tbody></table></div>
+    <p class="muted small" id="items_empty">No items yet — add from the sources below.</p>
+    <% if (!locked) { %>
+    <div class="row gap wrap" style="align-items:flex-end;margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+      <label class="grow">From a course this class is on
+        <select id="src_step" style="width:100%">
+          <option value="">— choose a lesson, quiz or notebook —</option>
+          <% sources.forEach(c => { %><optgroup label="<%= c.title %>"><% c.steps.forEach(s => { %><option value="<%= c.id %>|<%= s.id %>|<%= s.type %>" data-title="<%= s.title %>" data-sco="<%= s.config.sco_id || '' %>" data-quiz="<%= s.config.quiz_id || '' %>" data-url="<%= s.config.url || '' %>"><%= s.kind %>: <%= s.title %></option><% }) %></optgroup><% }) %>
+        </select></label>
+      <button type="button" class="btn small ghost" onclick="addStep()">Add</button>
+    </div>
+    <div class="row gap wrap" style="align-items:flex-end;margin-top:10px">
+      <label class="grow">Standalone Quiz Studio quiz
+        <select id="src_quiz" style="width:100%" onchange="showModules()"><option value="">— choose a published quiz —</option><% quizzes.forEach(qz => { %><option value="<%= qz.id %>" data-title="<%= qz.title %>" data-modules='<%- JSON.stringify(qz.modules || []).replace(/'/g, "&#39;") %>'><%= qz.title %></option><% }) %></select></label>
+      <button type="button" class="btn small ghost" onclick="addQuiz()">Add</button>
+    </div>
+    <div id="modules" class="small" style="display:none;margin:6px 0 0"></div>
+    <div class="row gap wrap" style="align-items:flex-end;margin-top:10px">
+      <label class="grow">Standalone Colab notebook<input id="src_colab" placeholder="https://colab.research.google.com/…"></label>
+      <button type="button" class="btn small ghost" onclick="addColab()">Add</button>
+    </div>
+    <div class="row gap wrap" style="align-items:flex-end;margin-top:10px">
+      <label class="grow">Anything else <span class="muted small">(the student marks it done, optionally with a note)</span><input id="src_free" placeholder="e.g. Write three lines about what a loop is"></label>
+      <button type="button" class="btn small ghost" onclick="addFree()">Add</button>
+    </div>
+    <% if (!sources.length) { %><p class="hint">No course steps to pick from — this class isn't enrolled on any course yet. Standalone quizzes and notebooks still work.</p><% } %>
+    <% } %>
+  </div>
+
+  <div class="actions">
+    <button class="btn" name="action" value="publish"><%= locked ? 'Save' : (editing ? 'Save & publish' : 'Publish to the class') %></button>
+    <% if (!locked) { %><button class="btn ghost" name="action" value="draft">Save as draft</button><% } %>
+    <a class="btn ghost" href="<%= editing ? ctx.base + '/assignments/' + a.id + ctx.qs : ctx.base + '/assignments' + ctx.qs %>">Cancel</a>
+  </div>
+</form>
+<script>
+var ITEMS = <%- JSON.stringify(editing ? a.items.map(i => ({ type: i.type, title: i.title, part_note: i.part_note || '', points: i.points, step_id: i.ref.step_id || '', course_id: i.ref.course_id || '', sco_id: i.ref.sco_id || '', quiz_id: i.ref.quiz_id || '', quiz_title: i.ref.quiz_title || '', url: i.ref.url || '', modules: i.modules || null })) : []) %>;
+var LOCKED = <%= locked ? 'true' : 'false' %>;
+var LABEL = { sco: 'Lesson', quiz: 'Quiz', colab: 'Colab', freeform: 'Task' };
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function render() {
+  var tb = document.querySelector('#items tbody'); tb.innerHTML = '';
+  ITEMS.forEach(function (it, i) {
+    var what = esc(it.title) + (it.type === 'quiz' && it.modules && it.modules.length ? ' <span class="muted small">modules: ' + esc(it.modules.join(', ')) + '</span>' : '') + (it.step_id ? ' <span class="muted small">course step</span>' : it.url ? ' <span class="muted small">link</span>' : '');
+    tb.insertAdjacentHTML('beforeend', '<tr><td class="muted small">' + (i + 1) + '</td><td>' + LABEL[it.type] + '</td>' +
+      '<td>' + (LOCKED ? what : '<input value="' + esc(it.title) + '" oninput="ITEMS[' + i + '].title=this.value" style="min-width:220px">' + (what.indexOf('<span') >= 0 ? ' ' + what.slice(what.indexOf('<span')) : '')) + '</td>' +
+      '<td>' + (LOCKED ? esc(it.part_note) : '<input value="' + esc(it.part_note) + '" oninput="ITEMS[' + i + '].part_note=this.value" placeholder="optional">') + '</td>' +
+      '<td class="num">' + (LOCKED ? esc(it.points) : '<input type="number" min="0" max="1000" step="0.5" value="' + esc(it.points) + '" oninput="ITEMS[' + i + '].points=this.value" style="width:80px">') + '</td>' +
+      '<td class="actions">' + (LOCKED ? '' : '<button type="button" class="link small" onclick="mv(' + i + ',-1)">↑</button><button type="button" class="link small" onclick="mv(' + i + ',1)">↓</button><button type="button" class="link small" onclick="ITEMS.splice(' + i + ',1);render()">✕</button>') + '</td></tr>');
+  });
+  document.getElementById('items_empty').style.display = ITEMS.length ? 'none' : '';
+}
+function mv(i, d) { var j = i + d; if (j < 0 || j >= ITEMS.length) return; var t = ITEMS[i]; ITEMS[i] = ITEMS[j]; ITEMS[j] = t; render(); }
+function addStep() { var s = document.getElementById('src_step'), o = s.options[s.selectedIndex]; if (!o || !o.value) return; var p = o.value.split('|');
+  var type = p[2] === 'note' ? 'freeform' : p[2];
+  ITEMS.push({ type: type, title: o.dataset.title, part_note: '', points: type === 'quiz' ? 20 : 10, step_id: p[1], course_id: p[0], sco_id: o.dataset.sco, quiz_id: o.dataset.quiz, quiz_title: type === 'quiz' ? o.dataset.title : '', url: o.dataset.url, modules: null }); s.value = ''; render(); }
+function showModules() { var s = document.getElementById('src_quiz'), o = s.options[s.selectedIndex], box = document.getElementById('modules'); var mods = o && o.value ? JSON.parse(o.dataset.modules || '[]') : [];
+  if (!mods.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = ''; box.innerHTML = '<span class="muted">Only these modules (leave all unticked for the whole quiz): </span>' + mods.map(function (m) { return '<label style="display:inline-block;margin-right:10px"><input type="checkbox" class="modk" value="' + esc(m.key) + '"> ' + esc(m.title || m.key) + '</label>'; }).join(''); }
+function addQuiz() { var s = document.getElementById('src_quiz'), o = s.options[s.selectedIndex]; if (!o || !o.value) return;
+  var picked = Array.prototype.map.call(document.querySelectorAll('.modk:checked'), function (c) { return c.value; });
+  ITEMS.push({ type: 'quiz', title: o.dataset.title + (picked.length ? ' (' + picked.length + ' modules)' : ''), part_note: '', points: 20, step_id: '', course_id: '', sco_id: '', quiz_id: o.value, quiz_title: o.dataset.title, url: '', modules: picked.length ? picked : null }); s.value = ''; showModules(); render(); }
+function addColab() { var i = document.getElementById('src_colab'); var u = i.value.trim(); if (!/^https?:\/\//i.test(u)) { alert('Paste a full link starting with https://'); return; }
+  ITEMS.push({ type: 'colab', title: 'Notebook', part_note: '', points: 10, step_id: '', course_id: '', sco_id: '', quiz_id: '', quiz_title: '', url: u, modules: null }); i.value = ''; render(); }
+function addFree() { var i = document.getElementById('src_free'); var t = i.value.trim(); if (!t) return; ITEMS.push({ type: 'freeform', title: t, part_note: '', points: 10, step_id: '', course_id: '', sco_id: '', quiz_id: '', quiz_title: '', url: '', modules: null }); i.value = ''; render(); }
+document.getElementById('af').addEventListener('submit', function (e) {
+  if (!ITEMS.length) { e.preventDefault(); alert('Add at least one item.'); return; }
+  document.getElementById('items_json').value = JSON.stringify(ITEMS);
+  var d = document.getElementById('due_d').value, t = document.getElementById('due_t').value;
+  document.getElementById('due_at').value = d ? d + 'T' + (t || '23:59') : '';
+});
+render();
+</script>
+<%- include('../partials/footer') %>

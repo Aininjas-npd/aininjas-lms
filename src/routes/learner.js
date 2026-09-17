@@ -46,7 +46,8 @@ router.get('/dashboard', requireLogin, (req, res) => {
   const enrolledIds = new Set([...mineAll.active, ...mineAll.requested].map(e => e.course_id));
   // Only courses an admin marked "open enrollment" — and open to this student's school — are offered for self-enrol
   const catalog = q.courses.all().filter(c => c.is_published && c.open_enrollment && !enrolledIds.has(c.id) && enrolLib.courseOpenTo(c.id, req.user.school_slug));
-  res.render('dashboard', { title: 'My courses', mine, ended, catalog, widgets: plugins.widgets('learnerDashboard', req.user) });
+  const due = req.user.role === 'learner' ? require('../assign').forStudent(req.user).open.slice(0, 4) : [];
+  res.render('dashboard', { title: 'My courses', mine, ended, catalog, due, dueNow: require('../assign').nowLocal(), widgets: plugins.widgets('learnerDashboard', req.user) });
 });
 
 // Ask for a course (self-enroll if open, otherwise creates a "requested" enrollment for admin approval)

@@ -1,0 +1,31 @@
+<%- include('../partials/header') %>
+<p class="small"><a href="/classes/<%= encodeURIComponent(ctx.name) %><%= ctx.qs %>">← <%= ctx.name %></a></p>
+<div class="row between wrap">
+  <div><p class="eyebrow"><%= ctx.scope.school.name %> · <%= ctx.name %></p><h1 style="margin-top:4px">Assignments</h1>
+    <p class="muted" style="margin:4px 0 0">Homework, classwork and unit tests for this class. Drafts are only visible to staff.</p></div>
+  <span class="actions">
+    <a class="btn small" href="<%= ctx.base %>/assignments/new<%= ctx.qs %>">+ New assignment</a>
+    <a class="btn small ghost" href="<%= ctx.base %>/assignments/new<%= ctx.qs ? ctx.qs + '&' : '?' %>kind=unit_test">+ Unit test</a>
+    <a class="btn small ghost" href="<%= ctx.base %>/gradebook<%= ctx.qs %>">Gradebook</a>
+  </span>
+</div>
+<% if (!list.length) { %>
+<div class="card"><h3>Nothing set yet</h3><p class="muted">Build the first assignment from lessons, quizzes and notebooks of the courses this class is enrolled on — or a standalone quiz or Colab link.</p><a class="btn small" href="<%= ctx.base %>/assignments/new<%= ctx.qs %>">+ New assignment</a></div>
+<% } else { %>
+<div class="card"><div class="tw"><table class="table"><thead><tr><th>Assignment</th><th>Kind</th><th>Items</th><th>Due</th><th class="num">Points</th><th>Handed in</th><th>Graded</th><th class="num">Average</th><th></th></tr></thead><tbody>
+<% list.forEach(a => { const status = !a.published ? ['draft', 'draft'] : a.overdue ? ['completed', 'closed'] : ['active', 'open']; %>
+  <tr>
+    <td><a href="<%= ctx.base %>/assignments/<%= a.id %><%= ctx.qs %>"><strong><%= a.title %></strong></a><br><span class="badge <%= status[0] %>"><%= status[1] %></span><% if (a.released) { %> <span class="badge good">grades released</span><% } %></td>
+    <td class="small"><%= a.kind_label %></td>
+    <td class="small"><%= a.items.map(i => i.type_label + (i.modules ? ' (' + i.modules.length + ' modules)' : '')).join(', ') %></td>
+    <td class="small"><%= a.due_label || '—' %></td>
+    <td class="num"><%= a.total %></td>
+    <td class="small"><b><%= a.done %></b>/<%= a.students %><% if (a.started) { %> <span class="muted">· <%= a.started %> partly</span><% } %><% if (a.late) { %> <span class="badge warn" title="handed in after the due date"><%= a.late %> late</span><% } %></td>
+    <td class="small"><%= a.graded %>/<%= a.students %></td>
+    <td class="num"><%= a.avg != null ? a.avg + '/' + a.total : '—' %></td>
+    <td class="actions"><a class="btn small ghost" href="<%= ctx.base %>/assignments/<%= a.id %><%= ctx.qs %>"><%= a.published ? 'Grade' : 'Open' %></a></td>
+  </tr>
+<% }) %>
+</tbody></table></div></div>
+<% } %>
+<%- include('../partials/footer') %>

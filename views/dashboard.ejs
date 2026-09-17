@@ -2,6 +2,10 @@
 <p class="eyebrow">My courses</p>
 <h1>Welcome back, <%= user.name.split(' ')[0] %>.</h1>
 <p class="muted">Your courses and progress.</p>
+<% if (locals.due && due.length) { %>
+<div class="card" style="border-left:3px solid var(--ember)"><div class="row between wrap"><h3 style="margin:0">Assignments to do</h3><a class="small" href="/assignments">All assignments →</a></div>
+  <ul style="margin:8px 0 0;padding-left:18px"><% due.forEach(a => { %><li><a href="/assignments/<%= a.id %>"><%= a.title %></a> <span class="muted small"><%= a.kind_label %><% if (a.due_at) { %> · due <%= a.due_label %><% } %></span><% if (a.due_at && a.due_at < dueNow) { %> <span class="badge bad">overdue</span><% } else if (a.mine.anyDone) { %> <span class="badge pending">partly done</span><% } %></li><% }) %></ul></div>
+<% } %>
 <div class="grid">
 <% mine.forEach(e => { const s = e.summary; %>
   <div class="card">

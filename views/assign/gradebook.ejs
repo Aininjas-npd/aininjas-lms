@@ -1,0 +1,34 @@
+<%- include('../partials/header') %>
+<p class="small"><a href="/classes/<%= encodeURIComponent(ctx.name) %><%= ctx.qs %>">← <%= ctx.name %></a></p>
+<div class="row between wrap">
+  <div><p class="eyebrow"><%= ctx.scope.school.name %> · <%= ctx.name %></p><h1 style="margin-top:4px">Gradebook</h1>
+    <p class="muted" style="margin:4px 0 0">Every published assignment, classwork column and unit test. Type in a cell to grade; quiz marks are filled in automatically.</p></div>
+  <span class="actions">
+    <a class="btn small ghost" href="<%= ctx.base %>/assignments<%= ctx.qs %>">Assignments</a>
+    <a class="btn small ghost" href="<%= ctx.base %>/gradebook.csv<%= ctx.qs %>">⬇ Export CSV</a>
+    <details style="display:inline-block"><summary class="btn small" style="display:inline-block">+ Classwork column</summary>
+      <form method="post" action="<%= ctx.base %>/gradebook/column<%= ctx.qs %>" class="row gap" style="margin-top:8px"><input name="title" required placeholder="e.g. Participation wk 3" style="width:auto"><input type="number" name="points" value="10" min="0" step="0.5" style="width:80px" title="points"><input type="date" name="due_at" style="width:auto" title="date (optional)"><button class="btn small">Add</button></form></details>
+  </span>
+</div>
+<% if (!gb.assignments.length) { %>
+<div class="card"><h3>Nothing to grade yet</h3><p class="muted">Publish an assignment or add a classwork column and it appears here.</p></div>
+<% } else { %>
+<form method="post" action="<%= ctx.base %>/gradebook<%= ctx.qs %>">
+<div class="card"><div class="tw"><table class="table" style="font-size:13px"><thead>
+  <tr><th style="position:sticky;left:0;background:var(--white)">Student</th><% gb.assignments.forEach(a => { %><th colspan="<%= a.items.length %>" style="border-left:1px solid var(--line)"><a href="<%= ctx.base %>/assignments/<%= a.id %><%= ctx.qs %>"><%= a.title %></a><br><span class="muted small"><%= a.kind_label %> · /<%= a.total %><%= a.due_label ? ' · due ' + a.due_label : '' %><%= a.released ? '' : ' · not released' %></span></th><% }) %><th class="num" style="border-left:1px solid var(--line)">Total</th></tr>
+  <tr><th style="position:sticky;left:0;background:var(--white)"></th><% gb.assignments.forEach(a => a.items.forEach((it, i) => { %><th class="small muted" style="<%= i === 0 ? 'border-left:1px solid var(--line)' : '' %>"><%= it.type_label %> /<%= it.points %></th><% })) %><th style="border-left:1px solid var(--line)"></th></tr>
+</thead><tbody>
+<% gb.rows.forEach(r => { %>
+  <tr><td style="position:sticky;left:0;background:var(--white)"><a href="/students/<%= r.user.id %><%= ctx.qs %>"><%= r.user.name %></a></td>
+  <% r.cells.forEach(c => c.items.forEach((it, i) => { %>
+    <td class="num" style="<%= i === 0 ? 'border-left:1px solid var(--line);' : '' %>min-width:78px"><input type="number" step="0.5" min="0" name="g[u<%= r.user.id %>][i<%= it.id %>]" value="<%= it.source && it.source !== 'auto' ? it.score : '' %>" placeholder="<%= it.source === 'auto' ? it.score : (it.done ? '✓' : '') %>" style="width:70px;padding:5px 6px;text-align:right<%= it.source === 'auto' ? ';font-style:italic' : '' %>" title="<%= it.source === 'auto' ? 'auto-scored from the quiz; type to override' : (it.done ? 'handed in' : 'not handed in') %>"></td>
+  <% })) %>
+  <td class="num" style="border-left:1px solid var(--line)"><b><%= r.sum != null ? r.sum : '—' %></b><span class="muted small">/<%= r.sumMax || gb.maxAll %></span></td></tr>
+<% }) %>
+<% if (!gb.rows.length) { %><tr><td colspan="99" class="muted">No students in this class.</td></tr><% } %>
+</tbody></table></div>
+<div class="actions" style="margin-top:12px"><button class="btn">Save gradebook</button><span class="muted small">Italic = auto-scored quiz; ✓ = handed in, not yet graded.</span></div>
+</div>
+</form>
+<% } %>
+<%- include('../partials/footer') %>

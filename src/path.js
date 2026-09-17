@@ -137,16 +137,20 @@ async function listQuizzes() {
   return r.json();
 }
 /** Signed launch URL: Quiz Studio skips the name gate and posts the score to callbackUrl when the student finishes. */
-function launchUrl({ user, step, course, baseUrl, actor }) {
+function launchUrl({ user, step, course, baseUrl, actor, assignment }) {
   const now = Math.floor(Date.now() / 1000);
+  const quizId = step ? step.config.quiz_id : assignment.quiz_id;
   const jwt = ssoLib.sign({
     ...(actor ? { act: { sub: actor.id, name: actor.name } } : {}),   // "View as": Quiz Studio opens the quiz read-only
     iss: 'aininjas-academy', aud: 'quiz-studio', sub: String(user.id), jti: crypto.randomBytes(8).toString('hex'), iat: now, exp: now + 3 * 3600,
     email: user.email, name: user.name, school: user.organization || null, school_slug: user.school_slug || null, class_name: user.class_name || null,
-    step_id: step.id, course_id: course.id, source: 'Academy',
-    callback_url: `${baseUrl}/api/quiz-results`, return_url: `${baseUrl}/courses/${course.id}?done=${step.id}`,
+    step_id: step ? step.id : null, course_id: course ? course.id : null, source: 'Academy',
+    /* assignment context: Quiz Studio echoes assignment_item_id in the postback and plays only the listed modules */
+    ...(assignment ? { assignment_item_id: assignment.item_id, ...(assignment.modules ? { modules: assignment.modules } : {}) } : {}),
+    callback_url: `${baseUrl}/api/quiz-results`,
+    return_url: assignment ? `${baseUrl}/assignments/${assignment.id}?done=${assignment.item_id}` : `${baseUrl}/courses/${course.id}?done=${step.id}`,
   }, LAUNCH_SECRET);
-  return `${QUIZ_URL}/launch/${step.config.quiz_id}?launch=${encodeURIComponent(jwt)}`;
+  return `${QUIZ_URL}/launch/${quizId}?launch=${encodeURIComponent(jwt)}`;
 }
 /** Signed link into a live (teacher-hosted) session: identity comes with the student, results post back like any quiz. */
 function liveJoinUrl({ user, code, baseUrl, actor }) {
@@ -169,14 +173,22 @@ function applyQuizResult(rawBody, headers) {
   if (expect.length !== m[2].length || !crypto.timingSafeEqual(Buffer.from(expect), Buffer.from(m[2]))) throw new Error('Bad signature');
   const ev = JSON.parse(rawBody);
   const userId = +ev.student_ref;
+  const assign = require('./assign');
+  const score = { points: +ev.points || 0, max_points: +ev.max_points || 0 };
+  // an assignment item launched this quiz: fill its submission (the module filter makes max_points the item's own)
+  if (ev.assignment_item_id && userId) assign.applyQuizScore(+ev.assignment_item_id, userId, { ...score, ctx: { attempt_id: ev.attempt_id, quiz_id: ev.quiz_id, accuracy: ev.accuracy, belt: ev.belt, live: !!ev.live } });
   let step = ev.step_id ? db.prepare('SELECT * FROM path_steps WHERE id=?').get(+ev.step_id) : null;
-  // a live (teacher-hosted) session carries no step: credit the quiz step of a course the student is enrolled in
+  if (!step && ev.assignment_item_id) { q.logEvent.run(userId, null, null, 'quiz_completed', JSON.stringify({ assignment_item_id: ev.assignment_item_id, quiz_id: ev.quiz_id, points: ev.points, max_points: ev.max_points, belt: ev.belt })); return { userId, step: null }; }
+  // a live (teacher-hosted) session carries no step: credit the quiz step of a course the student is enrolled in,
+  // and any open assignment (e.g. a unit test) of that quiz for the student's class
   if (!step && ev.quiz_id && userId) {
+    assign.applyLiveQuizScore(userId, ev.quiz_id, score);
     step = db.prepare(`SELECT ps.* FROM path_steps ps JOIN enrollments e ON e.course_id=ps.course_id AND e.user_id=? AND e.status='active'
       WHERE ps.type='quiz' AND json_extract(ps.config, '$.quiz_id')=? ORDER BY e.enrolled_at LIMIT 1`).get(userId, +ev.quiz_id);
     if (!step) { q.logEvent.run(userId, null, null, 'quiz_completed', JSON.stringify({ live: true, quiz_id: ev.quiz_id, points: ev.points, max_points: ev.max_points, belt: ev.belt })); return { userId, step: null }; }
   }
   if (!userId || !step) throw new Error('Unknown student or step');
+  if (!ev.assignment_item_id && ev.quiz_id) assign.applyLiveQuizScore(userId, ev.quiz_id, score, { via: 'course', step_id: step.id });   // course step opened directly: still counts for an assignment of that quiz
   // keep the best score if they retry
   const cur = db.prepare('SELECT * FROM step_progress WHERE user_id=? AND step_id=?').get(userId, step.id);
   let prevPts = -1; if (cur && cur.score_json) { try { prevPts = JSON.parse(cur.score_json).points ?? -1; } catch {} }

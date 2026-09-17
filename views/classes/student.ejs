@@ -19,6 +19,14 @@
   <% s.outside.forEach(a => { %><tr><td><%= a.title %><% if (a.live) { %> <span class="muted small">live session</span><% } %></td><td class="num"><%= a.points %>/<%= a.max %></td><td class="num"><%= a.accuracy %>%</td><td><%= a.belt %></td><td class="small muted"><%= fmt(a.when) %></td></tr><% }) %>
   </tbody></table></div>
 <% } %>
+<% if (locals.assignments && assignments.length) { const qs2 = user.role === 'admin' && sc.school ? '?school=' + encodeURIComponent(sc.school.slug) : ''; %>
+<div class="card"><div class="row between wrap"><h3 style="margin:0">Assignments</h3><a class="small" href="/classes/<%= encodeURIComponent(s.user.class_name) %>/gradebook<%= qs2 %>">Gradebook →</a></div>
+  <table class="table" style="margin-top:10px"><thead><tr><th>Assignment</th><th>Kind</th><th>Due</th><th>Status</th><th class="num">Mark</th></tr></thead><tbody>
+  <% assignments.forEach(a => { const m = a.mine; %><tr><td><a href="/classes/<%= encodeURIComponent(a.class_name) %>/assignments/<%= a.id %><%= qs2 %>"><%= a.title %></a></td><td class="small"><%= a.kind_label %></td><td class="small"><%= a.due_label || '—' %></td>
+    <td><% if (m.allDone) { %><span class="badge good">handed in</span><% } else if (m.anyDone) { %><span class="badge pending">partly</span><% } else if (a.overdue) { %><span class="badge bad">missing</span><% } else { %><span class="badge">to do</span><% } %><% if (m.late) { %> <span class="badge warn">late</span><% } %></td>
+    <td class="num"><%= m.total != null ? m.total + '/' + a.total : '—' %><% if (m.total != null && !a.released) { %> <span class="muted small">unreleased</span><% } %></td></tr><% }) %>
+  </tbody></table></div>
+<% } %>
 <% if (!s.courses.length) { %><div class="card"><p class="muted">Not enrolled in any course yet.</p></div><% } %>
 <% s.courses.forEach(c => { const sm = c.summary; %>
 <div class="card">

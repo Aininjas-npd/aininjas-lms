@@ -1,0 +1,62 @@
+<%- include('../partials/header') %>
+<% const fmt = t => t ? String(t).slice(0, 16).replace('T', ' ') : '—'; const status = !a.published ? ['draft', 'draft'] : a.overdue ? ['completed', 'closed — past due'] : ['active', 'open']; %>
+<p class="small"><a href="<%= ctx.base %>/assignments<%= ctx.qs %>">← Assignments</a></p>
+<div class="row between wrap">
+  <div><p class="eyebrow"><%= ctx.scope.school.name %> · <%= ctx.name %> · <%= a.kind_label %></p><h1 style="margin-top:4px"><%= a.title %></h1>
+    <p class="muted" style="margin:4px 0 0"><span class="badge <%= status[0] %>"><%= status[1] %></span> <% if (a.released) { %><span class="badge good">grades released</span> <% } %>Due <%= a.due_label || 'no date' %> · <%= a.total %> points · set by <%= a.teacher || '—' %><% if (a.published_at) { %> · published <%= fmt(a.published_at) %><% } %></p></div>
+  <span class="actions">
+    <a class="btn small ghost" href="<%= ctx.base %>/assignments/<%= a.id %>/edit<%= ctx.qs %>">Edit</a>
+    <% if (!a.published) { %><form method="post" action="<%= ctx.base %>/assignments/<%= a.id %>/publish<%= ctx.qs %>" class="inline"><button class="btn small">Publish to the class</button></form>
+    <form method="post" action="<%= ctx.base %>/assignments/<%= a.id %>/delete<%= ctx.qs %>" class="inline" onsubmit="return confirm('Delete this draft?')"><button class="btn small ghost">Delete</button></form>
+    <% } else { %>
+    <% if (a.released) { %><form method="post" action="<%= ctx.base %>/assignments/<%= a.id %>/unrelease<%= ctx.qs %>" class="inline"><button class="btn small ghost">Hide grades</button></form><% } else { %><form method="post" action="<%= ctx.base %>/assignments/<%= a.id %>/release<%= ctx.qs %>" class="inline"><button class="btn small ghost">Release grades</button></form><% } %>
+    <form method="post" action="<%= ctx.base %>/assignments/<%= a.id %>/unpublish<%= ctx.qs %>" class="inline" onsubmit="return confirm('Take this back to draft? Students will stop seeing it; their work is kept.')"><button class="btn small ghost">Back to draft</button></form>
+    <% } %>
+  </span>
+</div>
+<% if (a.instructions) { %><div class="card"><p style="margin:0;white-space:pre-wrap"><%= a.instructions %></p></div><% } %>
+<div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
+  <div class="card stat"><p class="eyebrow">Students</p><h2 style="margin:0"><%= summary.students %></h2></div>
+  <div class="card stat"><p class="eyebrow">Handed in</p><h2 style="margin:0"><%= summary.done %></h2><p class="small muted" style="margin:4px 0 0"><%= summary.started %> partly<%= summary.late ? ' · ' + summary.late + ' late' : '' %></p></div>
+  <div class="card stat"><p class="eyebrow">Graded</p><h2 style="margin:0"><%= summary.graded %></h2></div>
+  <div class="card stat"><p class="eyebrow">Average</p><h2 style="margin:0"><%= summary.avg != null ? summary.avg + '/' + a.total : '—' %></h2></div>
+</div>
+<div class="card">
+  <h2>Items</h2>
+  <div class="tw"><table class="table"><thead><tr><th>#</th><th>Type</th><th>What</th><th>Part / note</th><th class="num">Points</th><th>Completes when</th></tr></thead><tbody>
+  <% a.items.forEach((it, i) => { %><tr><td class="muted small"><%= i + 1 %></td><td><%= it.type_label %></td><td><%= it.title %><% if (it.modules) { %> <span class="muted small">modules <%= it.modules.join(', ') %></span><% } %><% if (it.ref.url) { %> <a class="small" href="<%= it.ref.url %>" target="_blank" rel="noopener">link ↗</a><% } %><% if (it.standalone && it.type === 'quiz') { %> <span class="muted small">standalone</span><% } %></td><td class="small"><%= it.part_note || '—' %></td><td class="num"><%= it.points %></td>
+    <td class="small muted"><%= { sco: 'student marks the part done; whole-lesson SCORM status shown as evidence', quiz: 'quiz finished — scored automatically, scaled to the points', colab: 'student marks done, notebook link shown for grading', freeform: 'student marks done (with an optional note)' }[it.type] %></td></tr><% }) %>
+  </tbody></table></div>
+  <% if (a.kind === 'unit_test' && a.items.some(i => i.type === 'quiz')) { %><p class="hint">To sit this as a class, start a <a href="<%= quizUrl %>/admin" target="_blank" rel="noopener">Live session</a> in Quiz Studio for the same quiz — results from the live session fill this test automatically.</p><% } %>
+</div>
+
+<% if (a.published) { %>
+<form method="post" action="<%= ctx.base %>/assignments/<%= a.id %>/grades<%= ctx.qs %>">
+<div class="card">
+  <div class="row between wrap"><h2 style="margin:0">Students</h2><span class="muted small">Quiz marks fill in automatically (“auto”); type over them to override. Leave a box empty to leave it ungraded.</span></div>
+  <div class="tw"><table class="table"><thead><tr><th>Student</th><% a.items.forEach((it, i) => { %><th><%= i + 1 %>. <%= it.type_label %> <span class="muted small">/<%= it.points %></span></th><% }) %><th class="num">Total</th><th>Comment to student</th></tr></thead><tbody>
+  <% rows.forEach(r => { %>
+    <tr>
+      <td><a href="/students/<%= r.user.id %><%= ctx.qs %>"><strong><%= r.user.name %></strong></a><% if (r.late) { %> <span class="badge warn">late</span><% } %></td>
+      <% r.items.forEach(it => { const s = it.sub; const badge = s.status === 'graded' ? 'good' : s.status === 'submitted' ? 'active' : s.status === 'in_progress' ? 'pending' : ''; %>
+      <td style="min-width:170px">
+        <span class="badge <%= badge %>"><%= { not_started: 'not started', in_progress: 'started', submitted: 'handed in', graded: 'graded' }[s.status] %></span>
+        <% if (s.submitted_at) { %><span class="muted small"> <%= fmt(s.submitted_at) %></span><% } %>
+        <% if (it.type === 'quiz' && s.auto_score != null) { %><br><span class="small">quiz <%= s.auto_score %>/<%= s.auto_max %><% if (s.launch_ctx && /"live":true/.test(s.launch_ctx)) { %> <span class="muted">live</span><% } %></span><% } %>
+        <% if (it.type === 'sco' && it.evidence) { %><br><span class="small muted">lesson: <%= it.evidence.status %><%= it.evidence.score != null ? ' · ' + it.evidence.score : '' %></span><% } %>
+        <% if (s.notebook_url) { %><br><a class="small" href="<%= s.notebook_url %>" target="_blank" rel="noopener">notebook ↗</a><% } else if (it.evidence && it.evidence.notebook) { %><br><a class="small" href="<%= it.evidence.notebook %>" target="_blank" rel="noopener">notebook ↗</a><% } %>
+        <% if (s.note) { %><br><span class="small muted" title="<%= s.note %>">note: <%= s.note.slice(0, 60) %><%= s.note.length > 60 ? '…' : '' %></span><% } %>
+        <br><input type="number" step="0.5" min="0" max="<%= it.points * 2 %>" name="g[u<%= r.user.id %>][i<%= it.id %>]" value="<%= it.grade && it.grade.points != null ? it.grade.points : '' %>" placeholder="<%= it.source === 'auto' ? 'auto ' + it.score : '—' %>" style="width:90px;margin-top:4px"><% if (it.source) { %> <span class="muted small"><%= it.source %></span><% } %>
+      </td>
+      <% }) %>
+      <td class="num"><b><%= r.total != null ? r.total : '—' %></b><span class="muted small">/<%= a.total %></span></td>
+      <td><input name="c[u<%= r.user.id %>]" value="<%= r.comment || '' %>" placeholder="optional" style="min-width:180px"></td>
+    </tr>
+  <% }) %>
+  <% if (!rows.length) { %><tr><td colspan="<%= a.items.length + 3 %>" class="muted">No students in this class.</td></tr><% } %>
+  </tbody></table></div>
+  <div class="actions" style="margin-top:12px"><button class="btn">Save grades</button><button class="btn ghost" name="release" value="1">Save &amp; release to students</button></div>
+</div>
+</form>
+<% } %>
+<%- include('../partials/footer') %>

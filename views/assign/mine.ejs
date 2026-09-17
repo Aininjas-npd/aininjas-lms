@@ -1,0 +1,19 @@
+<%- include('../partials/header') %>
+<div class="row between wrap">
+  <div><p class="eyebrow"><%= user.class_name || '' %></p><h1 style="margin-top:4px">Assignments</h1><p class="muted" style="margin:4px 0 0">What your teacher has set, soonest due first.</p></div>
+</div>
+<% const card = (a, done) => { const m = a.mine; const overdue = a.due_at && a.due_at < now && !done; %>
+  <a class="card" href="/assignments/<%= a.id %>" style="display:block;text-decoration:none;color:inherit">
+    <div class="row between wrap">
+      <div><p class="eyebrow" style="margin:0"><%= a.kind_label %></p><h3 style="margin:4px 0"><%= a.title %></h3>
+        <p class="small muted" style="margin:0"><%= a.items.length %> item<%= a.items.length === 1 ? '' : 's' %> · <%= a.total %> points<% if (a.due_at) { %> · due <%= a.due_label %><% } %></p></div>
+      <div style="text-align:right">
+        <% if (overdue) { %><span class="badge bad">overdue</span><% } else if (done) { %><span class="badge good"><%= a.released && m.total != null ? m.total + '/' + a.total : 'handed in' %></span><% } else if (m.anyDone) { %><span class="badge pending"><%= m.items.filter(i => i.done).length %>/<%= m.items.length %> done</span><% } else { %><span class="badge">to do</span><% } %>
+      </div>
+    </div>
+  </a>
+<% }; %>
+<% if (!open.length && !past.length) { %><div class="card"><h3>Nothing yet</h3><p class="muted">When your teacher sets homework or a test it shows up here.</p></div><% } %>
+<% if (open.length) { %><h2 style="margin:18px 0 10px">To do</h2><% open.forEach(a => card(a, false)) %><% } %>
+<% if (past.length) { %><h2 style="margin:18px 0 10px">Handed in</h2><% past.forEach(a => card(a, true)) %><% } %>
+<%- include('../partials/footer') %>
