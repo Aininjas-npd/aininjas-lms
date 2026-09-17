@@ -19,18 +19,10 @@
   <button class="navtoggle" type="button" aria-controls="sitenav" aria-expanded="false" aria-label="Open menu" onclick="var n=document.getElementById('sitenav');n.classList.toggle('open');this.setAttribute('aria-expanded',n.classList.contains('open'))"><span></span><span></span><span></span></button>
   <nav class="sub" id="sitenav" aria-label="Primary">
     <% if (user && user.status === 'approved') { %>
-      <% const staff = ['admin','school_admin','teacher'].includes(user.role); %>
-      <% if (user.role === 'learner' || user.role === 'admin') { %><a href="/dashboard" class="<%= path === '/dashboard' ? 'on' : '' %>">My courses</a><% } %>
-      <% if (staff) { %><a href="/classes" class="<%= path.startsWith('/classes') || path.startsWith('/students') ? 'on' : '' %>"><%= user.role === 'teacher' ? 'My classes' : 'Classes' %></a><% } %>
-      <% pluginNav.forEach(n => { %><a href="<%= n.href %>" class="<%= path.startsWith(n.href) ? 'on' : '' %>"><%= n.label %></a><% }) %>
-      <% if (user.role === 'admin') { %>
-        <a href="/admin/courses" class="<%= path.startsWith('/admin/courses') ? 'on' : '' %>">Courses</a>
-        <a href="/admin/users" class="<%= path.startsWith('/admin/users') ? 'on' : '' %>">Users</a>
-        <a href="/admin" class="<%= path === '/admin' || path === '/admin/' ? 'on' : '' %>">Activity</a>
-      <% } %>
+      <% shellNav.forEach(n => { %><a href="<%= n.href %>" class="<%= n.on ? 'on' : '' %>"><%= n.label %></a><% }) %>
       <div class="right">
         <a href="/profile" class="who <%= path === '/profile' ? 'on' : '' %>"><b><%= user.name %></b><small><%= { admin: 'Administrator', school_admin: 'School Admin', teacher: 'Teacher' }[user.role] || 'Learner' %></small></a>
-        <% if (ssoEnabled && user.sso_sub) { %><a href="<%= accountsUrl %>/" title="Your AI Ninjas account">Account</a><% } %>
+        <% if (locals.accountHref) { %><a href="<%= accountHref %>" title="Your AI Ninjas account">Account</a><% } %>
         <form method="post" action="/logout" class="inline"><button class="link" type="submit">Log out</button></form>
       </div>
     <% } else if (user) { %>

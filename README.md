@@ -123,3 +123,10 @@ On *Build learning path*, drag any step by its ☰ handle and drop it where it b
 ## Live quizzes
 
 Teachers can host a quiz live from Quiz Studio (Live in its menu bar). Students join from the **Join a live quiz** box on their dashboard (`/live?code=…`), which sends them to Quiz Studio with a signed launch token, so their name and class come from Accounts. When the teacher ends the session the result posts back to `/api/quiz-results` without a `step_id`; the Academy credits the quiz step (matching `quiz_id`) of a course the student is enrolled in, or just logs a `quiz_completed` event if there is none.
+
+## One site: /assess and /account (Phase 0)
+
+Quiz Studio and Accounts can be served through the Academy's own domain — `academy.aininjas.com/assess/…` and
+`academy.aininjas.com/account/…` — with the Academy's menu on every page, so teachers and students see one site.
+Set `QUIZ_STUDIO_INTERNAL_URL` / `ACCOUNTS_INTERNAL_URL` to turn it on; **ONE-SITE.md** has the Railway steps.
+Code: `src/onesite.js` (addresses), `src/proxy.js` (streaming reverse proxy), `src/shell.js` (the shared menu).

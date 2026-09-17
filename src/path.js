@@ -28,9 +28,11 @@ CREATE TABLE IF NOT EXISTS step_progress (
 CREATE INDEX IF NOT EXISTS idx_step_progress_user ON step_progress(user_id);
 `);
 
-const QUIZ_URL = (process.env.QUIZ_STUDIO_URL || '').replace(/\/$/, '');
+const onesite = require('./onesite');
+const QUIZ_URL = onesite.quiz.public;       // browser-facing: /assess in one-site mode, else QUIZ_STUDIO_URL
+const QUIZ_API = onesite.quiz.api;          // server-to-server (Railway private URL in one-site mode)
 const LAUNCH_SECRET = process.env.QUIZ_LAUNCH_SECRET || '';
-const quizEnabled = () => !!(QUIZ_URL && LAUNCH_SECRET);
+const quizEnabled = () => !!(QUIZ_API && LAUNCH_SECRET);
 
 const TYPE_LABEL = { sco: 'Learn', quiz: 'Check', colab: 'Practice', note: 'Read' };
 const TYPE_ICON = { sco: '▶', quiz: '✓', colab: '{ }', note: '¶' };
@@ -130,7 +132,7 @@ function updateStep(stepId, { title, config }) {
 /* ---------- Quiz Studio: list quizzes, build launch URLs, accept results ---------- */
 async function listQuizzes() {
   if (!quizEnabled()) return [];
-  const r = await fetch(QUIZ_URL + '/api/sso/quizzes', { headers: { Authorization: 'Bearer ' + LAUNCH_SECRET }, signal: AbortSignal.timeout(8000) });
+  const r = await fetch(QUIZ_API + '/api/sso/quizzes', { headers: { Authorization: 'Bearer ' + LAUNCH_SECRET }, signal: AbortSignal.timeout(8000) });
   if (!r.ok) throw new Error('Quiz Studio HTTP ' + r.status);
   return r.json();
 }

@@ -8,9 +8,10 @@ const plugins = require('./plugins');
 const router = express.Router();
 
 /* ---------- Single sign-on through AI Ninjas Accounts (on when ACCOUNTS_URL + SSO_SECRET are set) ---------- */
-const ACCOUNTS_URL = (process.env.ACCOUNTS_URL || '').replace(/\/$/, '');
+const onesite = require('./onesite');
+const ACCOUNTS_URL = onesite.accounts.public;   // browser-facing: https://academy.aininjas.com/account in one-site mode
 const sso = ACCOUNTS_URL && process.env.SSO_SECRET
-  ? require('./aininjas-sso')({ accountsUrl: ACCOUNTS_URL, appSlug: process.env.SSO_APP_SLUG || 'lms', secret: process.env.SSO_SECRET })
+  ? require('./aininjas-sso')({ accountsUrl: ACCOUNTS_URL, apiUrl: onesite.accounts.api, appSlug: process.env.SSO_APP_SLUG || 'lms', secret: process.env.SSO_SECRET })
   : null;
 const safeReturn = v => (/^\/(?!\/)/.test(String(v || '')) ? String(v) : '');
 
@@ -154,7 +155,12 @@ router.post('/login', (req, res) => {
   res.redirect(user.status === 'approved' ? dest : '/pending');
 });
 
-router.post('/logout', (req, res) => req.session.destroy(() => res.redirect('/')));
+router.post('/logout', (req, res) => {
+  /* one site, one sign-out: also drop the Quiz Studio / Accounts / student cookies that live on this domain */
+  const secure = /^https:/i.test(onesite.BASE_URL) ? '; Secure' : '';
+  for (const c of ['qs_session', 'ain_session', 'ain_student']) res.append('Set-Cookie', `${c}=; Path=/; Max-Age=0; SameSite=Lax${secure}`);
+  req.session.destroy(() => res.redirect('/'));
+});
 router.get('/pending', (req, res) => {
   if (!req.user) return res.redirect('/login');
   if (req.user.status === 'approved') return res.redirect('/dashboard');

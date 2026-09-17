@@ -51,9 +51,10 @@ function signWebhook(rawBody, secret, ts = Math.floor(Date.now() / 1000)) {
   return `t=${ts},v1=${mac}`;
 }
 
-function createClient({ accountsUrl, appSlug, secret }) {
+function createClient({ accountsUrl, apiUrl, appSlug, secret }) {
   if (!accountsUrl || !appSlug || !secret) throw new Error('aininjas-sso: accountsUrl, appSlug and secret are required');
-  accountsUrl = accountsUrl.replace(/\/$/, '');
+  accountsUrl = accountsUrl.replace(/\/$/, '');          // browser-facing (sign-in redirects, links)
+  apiUrl = (apiUrl || accountsUrl).replace(/\/$/, '');   // server-to-server (Railway private URL when set)
   const seenJti = new Map();                      // one-time tokens (jti → exp)
   function sweep() { const now = Date.now() / 1000; for (const [k, v] of seenJti) if (v < now) seenJti.delete(k); }
 
@@ -100,7 +101,7 @@ function createClient({ accountsUrl, appSlug, secret }) {
 
     /** Call the Accounts app-API as this app. path e.g. '/grants'. */
     async api(path, { method = 'GET', body } = {}) {
-      const r = await fetch(accountsUrl + '/api/v1' + path, {
+      const r = await fetch(apiUrl + '/api/v1' + path, {
         method,
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + secret, 'X-App': appSlug },
         body: body === undefined ? undefined : JSON.stringify(body),

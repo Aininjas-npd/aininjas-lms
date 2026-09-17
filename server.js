@@ -6,6 +6,8 @@ const { db, q, DATA_DIR } = require('./src/db');
 const auth = require('./src/auth');
 const plugins = require('./src/plugins');
 const brand = require('./src/brand');
+const onesite = require('./src/onesite');          // /assess → Quiz Studio, /account → Accounts (one site)
+const shell = require('./src/shell');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,8 +16,8 @@ process.env.BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.set('trust proxy', 1);                       // behind nginx / Railway / Render
-app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1d' }));
+app.get('/favicon.ico', (req, res) => res.sendFile(path.join(__dirname, 'public', 'favicon.png')));   // browsers ask for this on pages without an icon link
 
 // Sessions persisted in SQLite so logins survive restarts.
 const SqliteStore = require('./src/session-store')(session);
@@ -27,12 +29,22 @@ app.use(session({
 }));
 app.use(auth.currentUser);
 app.use(brand.context);                          // school co-branding: res.locals.brand / brandCss
+
+/* One site: forward /assess/* and /account/* to the other services before any body parser touches the request,
+   passing along the Academy's menu so their pages wear the same header. */
+app.locals.pluginNavFor = user => plugins.nav(user && user.role === 'admin');
+if (onesite.quiz.on) require('./src/proxy').mount(app, { prefix: onesite.quiz.prefix, target: onesite.quiz.internal, secret: process.env.QUIZ_LAUNCH_SECRET, shell: shell.shellFor });
+if (onesite.accounts.on) require('./src/proxy').mount(app, { prefix: onesite.accounts.prefix, target: onesite.accounts.internal, secret: process.env.SSO_SECRET, shell: shell.shellFor });   // Accounts checks the proof against our registered app secret
+
+app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {                    // template globals
   res.locals.siteName = process.env.SITE_NAME || 'AI Ninjas Academy';
   res.locals.mainSite = process.env.MAIN_SITE_URL || 'https://aininjas.com';
   res.locals.pluginNav = plugins.nav(req.user?.role === 'admin');
   res.locals.path = req.path;
   res.locals.ssoEnabled = auth.ssoEnabled; res.locals.accountsUrl = auth.accountsUrl;
+  res.locals.shellNav = shell.navFor(req.user, req.path, res.locals.pluginNav);
+  res.locals.accountHref = req.user && req.user.sso_sub && onesite.accounts.configured ? (onesite.accounts.on ? onesite.accounts.prefix + '/' : onesite.accounts.public + '/') : null;
   next();
 });
 
@@ -50,4 +62,8 @@ app.use('/admin', require('./src/routes/admin'));
 app.use((req, res) => res.status(404).render('error', { title: 'Not found', message: 'Page not found.' }));
 app.use((err, req, res, next) => { console.error(err); res.status(500).render('error', { title: 'Error', message: err.message }); });
 
-app.listen(PORT, () => console.log(`AI Ninjas LMS running at ${process.env.BASE_URL}  (data dir: ${DATA_DIR})`));
+app.listen(PORT, () => {
+  console.log(`AI Ninjas LMS running at ${process.env.BASE_URL}  (data dir: ${DATA_DIR})`);
+  if (onesite.quiz.on) console.log(`  one site: ${onesite.quiz.prefix}/* → Quiz Studio at ${onesite.quiz.internal}`);
+  if (onesite.accounts.on) console.log(`  one site: ${onesite.accounts.prefix}/* → Accounts at ${onesite.accounts.internal}`);
+});

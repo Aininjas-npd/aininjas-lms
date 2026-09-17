@@ -6,7 +6,8 @@
 // AI Ninjas stays visible everywhere — this is co-branding, not white-labelling.
 const { db } = require('./db');
 
-const QUIZ_URL = (process.env.QUIZ_STUDIO_URL || '').replace(/\/$/, '');
+const onesite = require('./onesite');
+const QUIZ_URL = onesite.quiz.api;          // server-to-server (Railway private URL in one-site mode)
 const LAUNCH_SECRET = process.env.QUIZ_LAUNCH_SECRET || '';
 const COOKIE = 'ain_school';
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,39}$/;
