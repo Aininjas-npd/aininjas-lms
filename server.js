@@ -69,6 +69,7 @@ app.use('/admin', require('./src/routes/admin'));
 app.use((req, res) => res.status(404).render('error', { title: 'Not found', message: 'Page not found.' }));
 app.use((err, req, res, next) => { console.error(err); res.status(500).render('error', { title: 'Error', message: err.message }); });
 
+require('./src/storage').start();                // clear abandoned upload temp files; warn when the volume is nearly full
 require('./src/enrol').start();                  // scheduled enrolments: apply on their start day, end the day after their end date
 
 app.listen(PORT, () => {

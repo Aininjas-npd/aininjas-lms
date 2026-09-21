@@ -12,6 +12,9 @@ const http = require('http');
 const https = require('https');
 
 const HOP = new Set(['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'host']);
+// Upstream work can take a while — an AI quiz generation runs for several minutes — so the cap is
+// generous. PROXY_TIMEOUT_MS (seconds*1000) overrides it.
+const PROXY_TIMEOUT_MS = Math.max(30000, parseInt(process.env.PROXY_TIMEOUT_MS, 10) || 900000);
 
 /**
  * mount(app, { prefix: '/assess', target: 'http://host:4000', secret, shell: req => ({...}) })
@@ -42,7 +45,7 @@ function mount(app, { prefix, target, secret, shell, log = console }) {
     try {
       up = client.request({
         protocol: t.protocol, hostname: t.hostname, port: t.port || (t.protocol === 'https:' ? 443 : 80),
-        method: req.method, path: req.originalUrl, headers, agent, timeout: 120000,
+        method: req.method, path: req.originalUrl, headers, agent, timeout: PROXY_TIMEOUT_MS,
       }, r => {
       const out = {};
       for (const [k, v] of Object.entries(r.headers)) if (!HOP.has(k)) out[k] = v;

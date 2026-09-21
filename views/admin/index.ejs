@@ -26,6 +26,20 @@
   </div>
   <div>
     <% widgets.forEach(w => { %><%- w %><% }) %>
+    <div class="card"><h3>Storage</h3>
+      <% if (storage.pct !== null) { %>
+        <p style="margin:0 0 6px"><strong><%= storage.usedHuman %></strong> of <%= storage.totalHuman %> used<% if (storage.tight) { %> <span class="badge">nearly full</span><% } %><br>
+        <span class="muted small"><%= storage.freeHuman %> free · uploads fail once this runs out</span></p>
+        <div style="height:8px;border-radius:4px;background:#e7e2d6;overflow:hidden;margin-bottom:10px"><div style="height:100%;width:<%= Math.min(100, storage.pct) %>%;background:<%= storage.pct > 90 ? '#b3232f' : (storage.pct > 75 ? '#e8863a' : '#2e7d4f') %>"></div></div>
+      <% } %>
+      <table class="table"><tbody>
+      <% storage.items.slice(0, 6).forEach(i => { %><tr><td class="small"><%= i.dir ? '📁' : '📄' %> <%= i.name %></td><td class="small muted" style="text-align:right"><%= i.human %></td></tr><% }) %>
+      </tbody></table>
+      <form method="post" action="/admin/storage/sweep" style="margin-top:8px">
+        <button class="btn small ghost" type="submit">Clear abandoned uploads<% if (storage.stale) { %> (<%= storage.stale %>)<% } %></button>
+      </form>
+      <p class="muted small" style="margin-top:6px">A cancelled or timed-out course upload leaves its half-written file behind. This clears any older than a few hours.</p>
+    </div>
     <div class="card"><h3>Plugins</h3><% plugins.forEach(p => { %><p><strong><%= p.name %></strong><br><span class="muted small"><%= p.description %></span></p><% }) %></div>
   </div>
 </div>

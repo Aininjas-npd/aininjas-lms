@@ -9,6 +9,7 @@ const { importPackage, createCourse, addPackageToCourse, removePackage, packages
 const plugins = require('../plugins');
 const pathLib = require('../path');
 const brand = require('../brand');
+const storage = require('../storage');
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -28,8 +29,25 @@ router.get('/', (req, res) => {
                              ORDER BY e.id DESC LIMIT 25`).all();
   const courses = q.courses.all().map(c => ({ ...c, steps: pathLib.stepsFor(c.id).length, custom: pathLib.hasCustomPath(c.id),
     enrolled: db.prepare(`SELECT COUNT(*) n FROM enrollments WHERE course_id=? AND status='active'`).get(c.id).n }));
-  res.render('admin/index', { title: 'Admin', stats, recent, courses, widgets: plugins.widgets('adminDashboard'), plugins: plugins.list() });
+  res.render('admin/index', { title: 'Admin', stats, recent, courses, storage: storage.usage(), widgets: plugins.widgets('adminDashboard'), plugins: plugins.list() });
 });
+
+router.post('/storage/sweep', (req, res) => {
+  const r = storage.sweepTemp();
+  flash(req, r.files ? 'success' : 'error', r.files
+    ? `Cleared ${r.files} abandoned upload file${r.files === 1 ? '' : 's'} — ${r.human} reclaimed.`
+    : 'Nothing to clear: no upload temp files older than a few hours.');
+  res.redirect('/admin');
+});
+
+/* A full volume shows up as a cryptic ENOSPC halfway through an upload — say what it means. */
+function uploadError(e) {
+  if (e && (e.code === 'ENOSPC' || /ENOSPC|no space left/i.test(e.message || ''))) {
+    const u = storage.usage();
+    return `the data volume is full (${u.freeHuman} free of ${u.totalHuman}). Clear abandoned uploads from the Admin dashboard, delete a course you no longer need, or grow the volume in Railway, then try again.`;
+  }
+  return e.message;
+}
 
 // ---- Courses ----
 router.get('/courses', (req, res) => {
@@ -57,7 +75,7 @@ router.post('/courses/upload', upload.single('package'), (req, res) => {
     return res.redirect(`/admin/courses/${course.id}/path`);
   } catch (e) {
     console.error('[create course]', e);
-    flash(req, 'error', `Could not create the course: ${e.message}`);
+    flash(req, 'error', `Could not create the course: ${uploadError(e)}`);
   } finally { if (req.file) fs.rmSync(req.file.path, { force: true }); }
   res.redirect('/admin/courses');
 });
@@ -72,7 +90,7 @@ router.post('/courses/:id/packages', upload.single('package'), (req, res) => {
     if (custom) scos.forEach(s => pathLib.addStep(course.id, { type: 'sco', title: s.title, config: { sco_id: s.id } }));
     q.logEvent.run(req.user.id, course.id, null, 'package_added', JSON.stringify({ title: scos[0] && scos[0].package_title, lessons: scos.length }));
     flash(req, 'success', `Added "${scos[0].package_title}" — ${scos.length} lesson(s) appended to the path.`);
-  } catch (e) { console.error('[add package]', e); flash(req, 'error', `Import failed: ${e.message}`); }
+  } catch (e) { console.error('[add package]', e); flash(req, 'error', `Import failed: ${uploadError(e)}`); }
   finally { fs.rmSync(req.file.path, { force: true }); }
   res.redirect(`/admin/courses/${course.id}/path`);
 });
