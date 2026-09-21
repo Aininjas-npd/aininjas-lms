@@ -1,4 +1,27 @@
 <%- include('partials/header') %>
+
+<% (locals.updates || []).forEach(u => { %>
+  <div class="card" style="border-left:4px solid var(--crimson,#b3232f)">
+    <h3 style="margin:0 0 6px">An updated version of "<%= u.course.title %>" is ready</h3>
+    <p class="muted small" style="margin:0 0 10px">
+      <% if (u.next.version_note) { %><strong>What changed:</strong> <%= u.next.version_note %><br><% } %>
+      You are <strong><%= u.percent %>%</strong> through the version you are on (<%= u.done %> of <%= u.total %> steps done).
+      You can finish this one — nothing is being taken away.
+    </p>
+    <p class="small" style="margin:0 0 10px">
+      If you switch, you start the updated course at <strong>0%</strong> and work through it from the beginning.
+      Your current progress is kept and your teacher can still see it, but it does not carry across.
+      If you are part-way through with a class, staying is usually the right choice.
+    </p>
+    <form method="post" action="/courses/<%= u.course.id %>/switch-version" class="inline"
+          onsubmit="return confirm('Switch to the updated course? You will start at 0% on the new version.')">
+      <button class="btn small">Switch to the updated version</button>
+    </form>
+    <form method="post" action="/courses/<%= u.course.id %>/keep-version" class="inline">
+      <button class="btn small ghost">Stay on this one</button>
+    </form>
+  </div>
+<% }) %>
 <p class="eyebrow">My courses</p>
 <h1>Welcome back, <%= user.name.split(' ')[0] %>.</h1>
 <p class="muted">Your courses and progress.</p>

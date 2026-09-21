@@ -13,7 +13,7 @@
   <% if (!courses.length) { %><p class="muted">No courses yet — <a href="/admin/courses#new">create the first one</a>.</p><% } %>
   <table class="table" style="margin-top:10px"><tbody>
   <% courses.forEach(c => { %>
-    <tr><td><strong><%= c.title %></strong><% if (!c.is_published) { %> <span class="badge">hidden</span><% } %><% if (c.sequential) { %> <span class="badge" title="Steps unlock in order">🔒</span><% } %><br><span class="muted small"><%= c.steps %> step<%= c.steps === 1 ? '' : 's' %><%= c.custom ? '' : ' (lessons only)' %> · <%= c.enrolled %> enrolled</span></td>
+    <tr><td><strong><%= c.title %></strong><% if (!c.is_published) { %> <span class="badge" title="Closed to new enrolments; learners already enrolled keep access">closed to new enrolment</span><% } %><% if (c.sequential) { %> <span class="badge" title="Steps unlock in order">🔒</span><% } %><br><span class="muted small"><%= c.steps %> step<%= c.steps === 1 ? '' : 's' %><%= c.custom ? '' : ' (lessons only)' %> · <%= c.enrolled %> enrolled</span></td>
       <td class="actions" style="text-align:right;white-space:nowrap"><a class="btn small" href="/admin/courses/<%= c.id %>/path">✎ Edit path</a> <a class="btn small ghost" href="/admin/courses/<%= c.id %>">Progress</a></td></tr>
   <% }) %>
   </tbody></table>

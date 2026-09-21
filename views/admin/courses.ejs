@@ -1,12 +1,13 @@
 <%- include('../partials/header') %>
 <div class="row between wrap"><h1>Courses</h1><a class="btn small" href="#new" onclick="document.getElementById('new').open=true">+ New course</a></div>
-<table class="table"><thead><tr><th>Course</th><th>Lessons</th><th>Enrolled</th><th>Completed</th><th>Published</th><th>Enrollment</th><th></th></tr></thead><tbody>
+<table class="table"><thead><tr><th>Course</th><th>Lessons</th><th>Enrolled</th><th>Completed</th><th>New enrolments</th><th>Enrollment</th><th></th></tr></thead><tbody>
 <% courses.forEach(c => { %>
-  <tr><td><a href="/admin/courses/<%= c.id %>/path"><strong><%= c.title %></strong></a><br><span class="muted small"><%= c.slug %></span></td>
+  <tr><td><a href="/admin/courses/<%= c.id %>/path"><strong><%= c.title %></strong></a><% if (c.versionLabel) { %> <span class="badge"><%= c.versionLabel %></span><% } %><br><span class="muted small"><%= c.slug %></span></td>
     <td><%= c.scoCount %></td><td><%= c.enrolled %></td><td><%= c.completed %></td>
-    <td><form method="post" action="/admin/courses/<%= c.id %>/toggle" class="inline"><input type="hidden" name="field" value="is_published"><button class="link"><span class="badge <%= c.is_published ? 'active' : '' %>"><%= c.is_published ? 'published' : 'hidden' %></span></button></form></td>
+    <td><form method="post" action="/admin/courses/<%= c.id %>/toggle" class="inline"><input type="hidden" name="field" value="is_published"><button class="link" title="<%= c.is_published ? 'Close this course to new enrolments. Learners already enrolled keep full access.' : 'Open this course for new enrolments again.' %>"><span class="badge <%= c.is_published ? 'active' : '' %>"><%= c.is_published ? 'open to new learners' : 'closed to new enrolment' %></span></button><% if (!c.is_published && c.enrolled) { %><br><span class="muted small"><%= c.enrolled %> enrolled learner<%= c.enrolled === 1 ? ' still has' : 's still have' %> access</span><% } %></form></td>
     <td><form method="post" action="/admin/courses/<%= c.id %>/toggle" class="inline"><input type="hidden" name="field" value="open_enrollment"><button class="link"><span class="badge <%= c.open_enrollment ? 'active' : 'pending' %>"><%= c.open_enrollment ? 'open' : 'assigned by admin' %></span></button></form></td>
     <td class="actions"><a class="btn small" href="/admin/courses/<%= c.id %>/path">✎ Edit path</a><a class="btn small ghost" href="/admin/courses/<%= c.id %>">Progress</a><a class="btn small ghost" href="/admin/courses/<%= c.id %>/export.csv">CSV</a>
+      <% if (!c.superseded_by) { %><form method="post" action="/admin/courses/<%= c.id %>/new-version" class="inline" onsubmit="return confirm('Copy this course as a new version? Learners already enrolled stay on this one with their progress; new enrolments go to the copy.')"><input type="text" name="note" placeholder="what changed (optional)" style="width:190px" class="small"><button class="btn small ghost">+ New version</button></form><% } %>
       <form method="post" action="/admin/courses/<%= c.id %>/delete" onsubmit="return confirm('Delete this course and all progress?')"><button class="btn small danger">Delete</button></form></td></tr>
 <% }) %>
 </tbody></table>

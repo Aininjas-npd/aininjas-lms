@@ -10,6 +10,7 @@ const plugins = require('../plugins');
 const pathLib = require('../path');
 const brand = require('../brand');
 const storage = require('../storage');
+const versions = require('../versions');
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -49,9 +50,25 @@ function uploadError(e) {
   return e.message;
 }
 
+router.post('/courses/:id/new-version', (req, res) => {
+  const c = q.courseById.get(req.params.id);
+  if (!c) return res.status(404).render('error', { title: 'Not found', message: 'Course not found.' });
+  try {
+    const v = versions.newVersion(c.id, { note: req.body.note });
+    q.logEvent.run(req.user.id, v.id, null, 'course_versioned', JSON.stringify({ from: c.id, version: v.version_no }));
+    flash(req, 'success', `Created version ${v.version_no} of "${v.title}". Learners already on version ${c.version_no} keep it and their progress; new enrolments go to this one. Edit its path, then it is live.`);
+    res.redirect(`/admin/courses/${v.id}/path`);
+  } catch (e) {
+    console.error('[new version]', e);
+    flash(req, 'error', `Could not create a new version: ${e.message}`);
+    res.redirect('/admin/courses');
+  }
+});
+
 // ---- Courses ----
 router.get('/courses', (req, res) => {
   const courses = q.courses.all().map(c => ({
+    versionLabel: (c.version_no || 1) > 1 || c.superseded_by ? `v${c.version_no || 1}` : '',
     ...c,
     scoCount: db.prepare('SELECT COUNT(*) n FROM scos WHERE course_id=?').get(c.id).n,
     enrolled: db.prepare(`SELECT COUNT(*) n FROM enrollments WHERE course_id=? AND status='active'`).get(c.id).n,

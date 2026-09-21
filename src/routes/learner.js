@@ -45,9 +45,44 @@ router.get('/dashboard', requireLogin, (req, res) => {
   const ended = mineAll.ended.map(e => ({ ...e, summary: pathLib.pathSummary(req.user.id, e.course_id) }));
   const enrolledIds = new Set([...mineAll.active, ...mineAll.requested].map(e => e.course_id));
   // Only courses an admin marked "open enrollment" — and open to this student's school — are offered for self-enrol
-  const catalog = q.courses.all().filter(c => c.is_published && c.open_enrollment && !enrolledIds.has(c.id) && enrolLib.courseOpenTo(c.id, req.user.school_slug));
+  /* A learner already on v1 must not be able to self-enrol in v2 as a separate course — they are
+     offered the switch instead, so the catalogue hides every version of a family they are in. */
+  const myGroups = new Set([...mineAll.active, ...mineAll.requested, ...mineAll.ended]
+    .map(e => q.courseById.get(e.course_id)).filter(Boolean).map(c => c.version_group || c.id));
+  const catalog = q.courses.all().filter(c => c.is_published && c.open_enrollment && !enrolledIds.has(c.id)
+    && !myGroups.has(c.version_group || c.id) && enrolLib.courseOpenTo(c.id, req.user.school_slug));
   const due = req.user.role === 'learner' ? require('../assign').forStudent(req.user).open.slice(0, 4) : [];
-  res.render('dashboard', { title: 'My courses', mine, ended, catalog, due, dueNow: require('../assign').nowLocal(), widgets: plugins.widgets('learnerDashboard', req.user) });
+  /* An updated version of a course they are on: offered, never forced, with the numbers they
+     need to decide — what changed, and how much of the old one they have already done. */
+  const versions = require('../versions');
+  const updates = mineAll.active.map(e => {
+    const course = q.courseById.get(e.course_id);
+    const next = versions.newerThan(course);
+    if (!next) return null;
+    const declined = db.prepare(`SELECT 1 FROM events WHERE user_id=? AND type='version_declined' AND payload=?`).get(req.user.id, String(next.id));
+    if (declined) return null;
+    const s = pathLib.pathSummary(req.user.id, course.id);
+    return { course, next, percent: s.percent, done: s.done, total: s.total };
+  }).filter(Boolean);
+  res.render('dashboard', { title: 'My courses', mine, ended, catalog, due, updates, dueNow: require('../assign').nowLocal(), widgets: plugins.widgets('learnerDashboard', req.user) });
+});
+
+// Move to the updated version of a course — the learner's own choice, never automatic.
+router.post('/courses/:id/switch-version', requireLogin, (req, res) => {
+  const versions = require('../versions');
+  try {
+    const to = versions.switchLearner(req.user.id, +req.params.id);
+    q.logEvent.run(req.user.id, to.id, null, 'version_switched', JSON.stringify({ from: +req.params.id }));
+    flash(req, 'success', `You are now on the updated "${to.title}". Your progress on the earlier version is kept — ask your teacher if you need it back.`);
+  } catch (e) { flash(req, 'error', e.message); }
+  res.redirect('/dashboard');
+});
+// "Stay on this version" — remember the choice so the offer stops nagging
+router.post('/courses/:id/keep-version', requireLogin, (req, res) => {
+  const versions = require('../versions');
+  const next = versions.newerThan(q.courseById.get(+req.params.id));
+  if (next) db.prepare(`INSERT INTO events (user_id, course_id, type, payload) VALUES (?, ?, 'version_declined', ?)`).run(req.user.id, +req.params.id, String(next.id));
+  res.redirect('/dashboard');
 });
 
 // Ask for a course (self-enroll if open, otherwise creates a "requested" enrollment for admin approval)
