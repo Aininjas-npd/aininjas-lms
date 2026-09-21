@@ -119,8 +119,9 @@ function newVersion(courseId, { note } = {}) {
         let cfg = {};
         try { cfg = JSON.parse(st.config || '{}'); } catch { cfg = {}; }
         if (cfg.sco_id && scoMap.has(cfg.sco_id)) cfg.sco_id = scoMap.get(cfg.sco_id);
-        db.prepare('INSERT INTO path_steps (course_id, sort_order, type, title, config, audience) VALUES (?, ?, ?, ?, ?, ?)')
-          .run(newId, st.sort_order, st.type, st.title, JSON.stringify(cfg), st.audience || 'student');
+        const newStepId = db.prepare('INSERT INTO path_steps (course_id, sort_order, type, title, config, audience) VALUES (?, ?, ?, ?, ?, ?)')
+          .run(newId, st.sort_order, st.type, st.title, JSON.stringify(cfg), st.audience || 'student').lastInsertRowid;
+        try { require('./stepfiles').copyToStep(st.id, newStepId); } catch (e) { /* attachments are best-effort */ }
       }
 
       // which schools the course is offered to (see enrol.js: course_schools)

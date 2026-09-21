@@ -29,7 +29,25 @@
           <% if (s.type === 'quiz') { %>Quiz Studio #<%= s.config.quiz_id %> <%= s.config.quiz_title ? '· ' + s.config.quiz_title : '' %><% } %>
           <% if (s.type === 'colab') { %><% if (s.config.file) { %>📓 <%= s.config.filename %> <span class="muted">(students download &amp; upload to their Colab)</span><% } else { %><a href="<%= s.config.url %>" target="_blank" rel="noopener"><%= s.config.url %></a><% } %><% } %>
         </p>
-        <% if (s.custom) { %>
+        <% if (s.custom) { const files = (locals.stepFiles || {})[s.id] || []; %>
+        <div class="small" style="margin-top:6px">
+          <% if (files.length) { %>
+            <b>Data files</b>
+            <ul style="margin:4px 0 6px; padding-left:18px">
+            <% files.forEach(f => { %>
+              <li>📎 <%= f.filename %> <span class="muted">· <%= f.human %><%= f.note ? ' · ' + f.note : '' %></span>
+                <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/files/<%= f.id %>/delete" class="inline" onsubmit="return confirm('Remove <%= f.filename %>?')"><button class="link small">remove</button></form>
+              </li>
+            <% }) %>
+            </ul>
+          <% } %>
+          <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/files" enctype="multipart/form-data" class="row gap">
+            <input type="file" name="files" multiple>
+            <input type="text" name="note" placeholder="what these are (optional)" style="max-width:220px">
+            <button class="btn small ghost" type="submit">Attach data files</button>
+          </form>
+          <div class="hint">CSV, JSON, Excel, images, zip, PDF … up to 100 MB each. Whoever may see this step may download them — attach answer sets to a teachers-only step.</div>
+        </div>
         <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/audience" class="row gap" style="margin-top:4px">
           <label class="small muted" for="aud-<%= s.id %>">Who sees this</label>
           <select id="aud-<%= s.id %>" name="audience" onchange="this.form.submit()" style="max-width:260px">

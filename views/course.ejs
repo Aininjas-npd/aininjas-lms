@@ -20,6 +20,17 @@
       <div class="kind"><%= s.kind %><%= s.type === 'colab' ? ' · Google Colab' : s.type === 'quiz' ? ' · Quiz' : s.type === 'sco' ? ' · Lesson' : '' %></div>
       <h3><%= s.title %></h3>
       <% if (s.type === 'colab' && s.config.instructions) { %><p class="small serif"><%= s.config.instructions %></p><% } %>
+      <% const sfiles = (locals.stepFiles || {})[s.id] || []; if (sfiles.length && !s.locked) { %>
+        <p class="small" style="margin-top:6px"><b>Data files for this step</b>
+          <% if (s.type === 'colab') { %><span class="muted">— download, then in Colab use the 📁 Files panel → Upload</span><% } %>
+        </p>
+        <ul class="small" style="margin:2px 0 6px; padding-left:18px">
+        <% sfiles.forEach(f => { %>
+          <li>📎 <a href="/courses/<%= course.id %>/steps/<%= s.id %>/files/<%= f.id %>"><%= f.filename %></a>
+            <span class="muted">· <%= f.human %><%= f.note ? ' · ' + f.note : '' %></span></li>
+        <% }) %>
+        </ul>
+      <% } %>
       <% if (s.type === 'note' && s.config.html) { %><div class="small serif"><%- s.config.html %></div><% } %>
       <p class="small muted meta">
         <% if (done) { %>Completed<%= s.when ? ' · ' + s.when.slice(0,10) : '' %><% } else if (s.status === 'started') { %>In progress<% } else { %>Not started<% } %>

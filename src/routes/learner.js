@@ -124,7 +124,8 @@ router.get('/courses/:id', requireLogin, (req, res) => {
     return res.status(403).render('error', { title: 'No access', message: 'You are not enrolled in this course yet.' });
   }
   const lp = pathLib.pathSummary(req.user.id, course.id, req.user);
-  res.render('course', { title: course.title, course, lp, justDone: req.query.done || null, quizEnabled: pathLib.quizEnabled(),
+  const stepFiles = require('../stepfiles').forSteps(lp.steps.filter(s2 => s2.custom).map(s2 => s2.id));
+  res.render('course', { title: course.title, course, lp, stepFiles, justDone: req.query.done || null, quizEnabled: pathLib.quizEnabled(),
                          widgets: plugins.widgets('results', req.user, course) });
 });
 
@@ -168,6 +169,18 @@ router.get('/courses/:id/steps/:stepId/go', requireLogin, (req, res) => {
   if (step.type === 'note') { pathLib.markDone(req.user.id, step.id); return res.redirect(`/courses/${course.id}`); }
   res.redirect(`/courses/${course.id}`);
 });
+// A data file attached to a step. stepFor() has already checked enrolment, the lock and the
+// audience, so a teacher-only step's files are teacher-only too.
+router.get('/courses/:id/steps/:stepId/files/:fileId', requireLogin, (req, res) => {
+  const ctx = stepFor(req, res); if (!ctx) return;
+  const stepfiles = require('../stepfiles');
+  const row = stepfiles.byId(ctx.step.id, +req.params.fileId);
+  if (!row) return res.status(404).render('error', { title: 'Not found', message: 'That file is no longer attached to this step.' });
+  const file = stepfiles.diskPath(row);
+  if (!require('fs').existsSync(file)) return res.status(404).render('error', { title: 'Not found', message: 'The file is missing — tell your teacher.' });
+  res.download(file, row.filename);
+});
+
 // Practice step with an uploaded notebook: download it (students then upload it to their own Colab)
 router.get('/courses/:id/steps/:stepId/notebook', requireLogin, (req, res) => {
   const ctx = stepFor(req, res); if (!ctx) return;

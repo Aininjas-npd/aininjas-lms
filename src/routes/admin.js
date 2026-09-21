@@ -11,6 +11,7 @@ const pathLib = require('../path');
 const brand = require('../brand');
 const storage = require('../storage');
 const versions = require('../versions');
+const stepfiles = require('../stepfiles');
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -153,7 +154,8 @@ router.get('/courses/:id/path', async (req, res) => {
   if (!course) return res.status(404).render('error', { title: 'Not found', message: 'Course not found.' });
   let quizzes = [], quizError = null;
   if (pathLib.quizEnabled()) { try { quizzes = await pathLib.listQuizzes(); } catch (e) { quizError = e.message; } }
-  res.render('admin/path', { title: 'Learning path · ' + course.title, course, steps: pathLib.stepsFor(course.id), custom: pathLib.hasCustomPath(course.id),
+  const _steps = pathLib.stepsFor(course.id);
+  res.render('admin/path', { title: 'Learning path · ' + course.title, course, steps: _steps, stepFiles: stepfiles.forSteps(_steps.filter(s2 => s2.custom).map(s2 => s2.id)), custom: pathLib.hasCustomPath(course.id),
     scos: q.scosForCourse.all(course.id), packages: packagesFor(course.id), quizzes, quizError, quizEnabled: pathLib.quizEnabled(), quizUrl: pathLib.QUIZ_URL });
 });
 const notebookDir = path.join(DATA_DIR, 'notebooks');
@@ -196,6 +198,27 @@ router.post('/courses/:id/path/reorder', express.json(), (req, res) => {
   if (!ids.length) return res.status(400).json({ error: 'No order given' });
   res.json({ ok: true, order: pathLib.reorder(+req.params.id, ids) });
 });
+const dataUpload = multer({ dest: path.join(DATA_DIR, 'tmp-uploads'), limits: { fileSize: 100 * 1024 * 1024, files: 10 } });
+/* Data files for a step: the CSVs a notebook reads, a worksheet, a teacher's answer set. */
+router.post('/courses/:id/path/steps/:stepId/files', dataUpload.array('files', 10), (req, res) => {
+  const added = [];
+  try {
+    for (const f of req.files || []) added.push(stepfiles.attach(+req.params.stepId, f, { note: req.body.note }));
+    flash(req, added.length ? 'success' : 'error', added.length
+      ? `Attached ${added.length} file${added.length === 1 ? '' : 's'} — ${added.map(a => a.filename).join(', ')}.`
+      : 'Choose at least one file.');
+  } catch (e) {
+    for (const f of req.files || []) { try { fs.rmSync(f.path, { force: true }); } catch {} }
+    flash(req, 'error', `Could not attach: ${e.code === 'ENOSPC' ? 'the data volume is full — clear space on the Admin dashboard.' : e.message}`);
+  }
+  res.redirect(`/admin/courses/${req.params.id}/path`);
+});
+router.post('/courses/:id/path/steps/:stepId/files/:fileId/delete', (req, res) => {
+  stepfiles.remove(+req.params.stepId, +req.params.fileId);
+  flash(req, 'success', 'File removed.');
+  res.redirect(`/admin/courses/${req.params.id}/path`);
+});
+
 router.post('/courses/:id/path/steps/:stepId/:action', (req, res) => {
   const { stepId, action } = req.params;
   if (action === 'up' || action === 'down') pathLib.moveStep(+stepId, action);
