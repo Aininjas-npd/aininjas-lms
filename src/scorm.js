@@ -1,5 +1,6 @@
 // SCORM 1.2 package handling: unzip, parse imsmanifest.xml, register SCOs.
 const AdmZip = require('adm-zip');
+const storage = require('./storage');
 const path = require('path');
 const fs = require('fs');
 const { XMLParser } = require('fast-xml-parser');
@@ -81,15 +82,46 @@ function parsePackage(zipPath, { title, description } = {}) {
   if (!scos.length) throw new Error('No launchable SCOs (items with identifierref + resource href) found in manifest.');
   return { entries, prefix, manifest, tree, scos, title: courseTitle, description: description || textOf(manifest.metadata?.description) || null, schemaversion: String(schemaversion) };
 }
-function writeFiles(entries, prefix, dest) {
-  fs.mkdirSync(dest, { recursive: true });
+/** Unpacked size of the entries we are about to write. */
+function unpackedSize(entries, prefix) {
+  let n = 0;
   for (const e of entries) {
     if (e.isDirectory || !e.entryName.startsWith(prefix)) continue;
-    const rel = e.entryName.slice(prefix.length);
-    const out = path.join(dest, rel);
-    if (!out.startsWith(dest)) continue;               // zip-slip guard
-    fs.mkdirSync(path.dirname(out), { recursive: true });
-    fs.writeFileSync(out, e.getData());
+    n += (e.header && e.header.size) || 0;
+  }
+  return n;
+}
+
+/** Refuse before writing anything if the volume cannot hold the unpacked course. */
+function checkRoom(entries, prefix) {
+  const need = unpackedSize(entries, prefix);
+  let free = NaN;
+  try { const st = fs.statfsSync(DATA_DIR); free = st.bavail * st.bsize; } catch { return; }
+  if (!Number.isFinite(free)) return;
+  const margin = 50 * 1024 * 1024;                     // leave room for the database and sessions
+  if (need + margin > free) {
+    throw new Error(`this package needs ${storage.human(need)} once unpacked and only ${storage.human(free)} is free on the data volume. `
+      + 'Clear abandoned uploads on the Admin dashboard, delete a course you no longer need, or grow the volume in Railway, then try again.');
+  }
+}
+
+function writeFiles(entries, prefix, dest) {
+  checkRoom(entries, prefix);
+  const fresh = !fs.existsSync(dest);
+  fs.mkdirSync(dest, { recursive: true });
+  try {
+    for (const e of entries) {
+      if (e.isDirectory || !e.entryName.startsWith(prefix)) continue;
+      const rel = e.entryName.slice(prefix.length);
+      const out = path.join(dest, rel);
+      if (!out.startsWith(dest)) continue;             // zip-slip guard
+      fs.mkdirSync(path.dirname(out), { recursive: true });
+      fs.writeFileSync(out, e.getData());
+    }
+  } catch (err) {
+    // A half-written course is dead weight on a volume that is already short of room.
+    if (fresh) { try { fs.rmSync(dest, { recursive: true, force: true }); } catch { /* best effort */ } }
+    throw err;
   }
 }
 const insertSco = db.prepare(`INSERT INTO scos (course_id, identifier, title, launch_href, sort_order, mastery_score, max_time_allowed, data_from_lms, package, package_title)
