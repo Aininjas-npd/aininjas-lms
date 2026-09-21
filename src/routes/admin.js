@@ -12,6 +12,8 @@ const brand = require('../brand');
 const storage = require('../storage');
 const versions = require('../versions');
 const stepfiles = require('../stepfiles');
+const fetchurl = require('../fetchurl');
+const jobs = require('../jobs');
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -127,6 +129,98 @@ router.post('/courses/:id/packages', packageUpload, async (req, res) => {
   finally { fs.rmSync(req.file.path, { force: true }); }
   res.redirect(`/admin/courses/${course.id}/path`);
 });
+/* ---- Sideload: import a package from a URL instead of uploading it -------------------------
+ *
+ * Railway cuts any request body that takes longer than five minutes, so a large package can never
+ * be uploaded through the browser. Fetching it server-side has no such deadline. These two routes
+ * mirror the two upload routes above; each answers straight away with a job id and does the work
+ * in the background, because the fetch itself outlives any sensible request.
+ */
+function startSideload({ req, kind, meta, run }) {
+  const job = jobs.create(kind, meta);
+  const url = String(req.body.package_url || '').trim();
+  const userId = req.user.id;
+
+  (async () => {
+    let got = null;
+    try {
+      const u = storage.usage();
+      job.step('Contacting the host…');
+      let named = false;
+      got = await fetchurl.download(url, {
+        maxBytes: MAX_PACKAGE_MB * 1024 * 1024,
+        freeBytes: Number.isFinite(u.free) ? u.free : 0,
+        onProgress: p => {
+          // Once bytes are actually moving, say where from — "Contacting the host…" sitting over a
+          // filling progress bar reads as if it were stuck.
+          if (!named) { job.step(`Downloading from ${p.source}…`); named = true; }
+          job.progress({
+            pct: p.pct,
+            note: p.humanTotal
+              ? `${p.humanReceived} of ${p.humanTotal} at ${p.humanRate}${p.etaSec > 2 ? ` · about ${p.etaSec < 60 ? Math.round(p.etaSec) + ' s' : Math.round(p.etaSec / 60) + ' min'} left` : ''}`
+              : `${p.humanReceived} at ${p.humanRate}`,
+          });
+        },
+      });
+      job.step(`Downloaded ${got.name} — unpacking and reading its lessons…`);
+      await run({ job, got, userId });
+    } catch (e) {
+      console.error(`[sideload:${kind}]`, e);
+      job.fail(new Error(uploadError(e)));
+    } finally {
+      if (got) { try { fs.rmSync(got.file, { force: true }); } catch { /* already gone */ } }
+    }
+  })();
+
+  return job.id;
+}
+
+router.get('/jobs/:id', (req, res) => {
+  const v = jobs.view(req.params.id);
+  if (!v) return res.status(404).json({ error: 'That job is no longer running — the server may have restarted. Start the import again.' });
+  res.json(v);
+});
+
+router.post('/courses/import-url', (req, res) => {
+  if (!String(req.body.package_url || '').trim()) return res.status(400).json({ error: 'Paste a link to the .zip package.' });
+  const id = startSideload({
+    req, kind: 'course', meta: { title: req.body.title },
+    run: async ({ job, got, userId }) => {
+      const course = await importPackage(got.file, {
+        title: req.body.title, description: req.body.description,
+        openEnrollment: req.body.open_enrollment === 'on',
+      });
+      const n = db.prepare('SELECT COUNT(*) n FROM scos WHERE course_id=?').get(course.id).n;
+      q.logEvent.run(userId, course.id, null, 'course_created', JSON.stringify({ title: course.title, withPackage: true, via: 'url', source: got.source }));
+      job.done({
+        redirect: `/admin/courses/${course.id}/path`,
+        message: `Created "${course.title}" with ${n} lesson(s) from ${got.source}.`,
+      });
+    },
+  });
+  res.status(202).json({ jobId: id });
+});
+
+router.post('/courses/:id/packages/import-url', (req, res) => {
+  const course = q.courseById.get(req.params.id);
+  if (!course) return res.status(404).json({ error: 'Course not found.' });
+  if (!String(req.body.package_url || '').trim()) return res.status(400).json({ error: 'Paste a link to the .zip package.' });
+  const id = startSideload({
+    req, kind: 'package', meta: { courseId: course.id },
+    run: async ({ job, got, userId }) => {
+      const custom = pathLib.hasCustomPath(course.id);
+      const scos = await addPackageToCourse(course.id, got.file, { title: req.body.title });
+      if (custom) scos.forEach(s => pathLib.addStep(course.id, { type: 'sco', title: s.title, config: { sco_id: s.id } }));
+      q.logEvent.run(userId, course.id, null, 'package_added', JSON.stringify({ title: scos[0] && scos[0].package_title, lessons: scos.length, via: 'url' }));
+      job.done({
+        redirect: `/admin/courses/${course.id}/path`,
+        message: `Added "${scos[0].package_title}" — ${scos.length} lesson(s) appended to the path.`,
+      });
+    },
+  });
+  res.status(202).json({ jobId: id });
+});
+
 router.post('/courses/:id/packages/remove', (req, res) => {
   removePackage(+req.params.id, String(req.body.folder || ''));
   flash(req, 'success', 'Package removed.');

@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node test/e2e.js"
+    "test": "node test/sideload.js && node test/sideload-routes.js && node test/e2e.js",
+    "test:e2e": "node test/e2e.js",
+    "test:sideload": "node test/sideload.js && node test/sideload-routes.js"
   },
   "keywords": [],
   "author": "",

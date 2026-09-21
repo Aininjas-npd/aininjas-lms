@@ -121,6 +121,15 @@
       <label>Package name <span class="muted">(optional — defaults to the manifest title)</span></label><input type="text" name="title" placeholder="e.g. Module 2 · Variables">
       <p><button class="btn small" type="submit">Upload & add lessons to the path</button></p>
     </form>
+    <details style="margin-top:10px">
+      <summary style="cursor:pointer;font-size:13.5px">…or import from a link <span class="muted">(for packages over ~1 GB)</span></summary>
+      <p class="muted small" style="margin:8px 0">Browser uploads are cut off after five minutes, so a very large package cannot finish that way. Put the .zip in Google Drive, Dropbox or S3, share it so anyone with the link can read it, and paste the link here — the server fetches it directly.</p>
+      <form method="post" action="/admin/courses/<%= course.id %>/packages/import-url" data-sideload>
+        <label>Link to the .zip package</label><input type="url" name="package_url" placeholder="https://drive.google.com/file/d/…" required>
+        <label>Package name <span class="muted">(optional)</span></label><input type="text" name="title" placeholder="e.g. Module 2 · Variables">
+        <p><button class="btn small ghost" type="submit">Fetch & add lessons to the path</button></p>
+      </form>
+    </details>
   </div>
   <div class="card"><h3>Tips</h3>
     <p class="small serif">A typical week: <b>Learn</b> lesson → <b>Practice</b> Colab → <b>Check</b> quiz. Put the quiz after the Colab step when the quiz is how you grade the coding exercise.</p>
@@ -152,4 +161,5 @@
 })();
 </script>
 <script src="/upload-progress.js"></script>
+<script src="/sideload.js"></script>
 <%- include('../partials/footer') %>

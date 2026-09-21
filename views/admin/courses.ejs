@@ -20,7 +20,19 @@
     <label class="check"><input type="checkbox" name="open_enrollment"> Open enrollment — shown on every learner's dashboard to self-enroll (otherwise it appears only for learners you enroll)</label>
     <p><button class="btn">Create course</button></p>
   </form>
+  <details style="margin-top:6px">
+    <summary style="cursor:pointer;font-size:13.5px">…or start it from a package too large to upload <span class="muted">(over ~1 GB)</span></summary>
+    <p class="muted small" style="margin:8px 0">Browser uploads are cut off after five minutes, so a very large package cannot finish that way. Put the .zip in Google Drive, Dropbox or S3, share it so anyone with the link can read it, and paste the link here — the server fetches it directly, which has no time limit.</p>
+    <form method="post" action="/admin/courses/import-url" data-sideload>
+      <label>Title</label><input type="text" name="title" placeholder="e.g. Python Foundations — Grade 7">
+      <label>Description <span class="muted">(optional)</span></label><textarea name="description"></textarea>
+      <label>Link to the .zip package</label><input type="url" name="package_url" placeholder="https://drive.google.com/file/d/…" required>
+      <label class="check"><input type="checkbox" name="open_enrollment"> Open enrollment — shown on every learner's dashboard to self-enroll</label>
+      <p><button class="btn ghost">Fetch & create course</button></p>
+    </form>
+  </details>
 </details>
 <script src="/upload-progress.js"></script>
+<script src="/sideload.js"></script>
 <script>if (location.hash === '#new') document.getElementById('new').open = true;</script>
 <%- include('../partials/footer') %>
