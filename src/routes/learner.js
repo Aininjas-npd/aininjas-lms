@@ -41,8 +41,8 @@ router.get('/dashboard', requireLogin, (req, res) => {
   /* active enrolments only: a scheduled one shows nothing until its start day, an ended one moves to the list below */
   const enrolLib = require('../enrol');
   const mineAll = enrolLib.forStudent(req.user.id);
-  const mine = [...mineAll.active, ...mineAll.requested].map(e => ({ ...e, summary: pathLib.pathSummary(req.user.id, e.course_id) }));
-  const ended = mineAll.ended.map(e => ({ ...e, summary: pathLib.pathSummary(req.user.id, e.course_id) }));
+  const mine = [...mineAll.active, ...mineAll.requested].map(e => ({ ...e, summary: pathLib.pathSummary(req.user.id, e.course_id, req.user) }));
+  const ended = mineAll.ended.map(e => ({ ...e, summary: pathLib.pathSummary(req.user.id, e.course_id, req.user) }));
   const enrolledIds = new Set([...mineAll.active, ...mineAll.requested].map(e => e.course_id));
   // Only courses an admin marked "open enrollment" — and open to this student's school — are offered for self-enrol
   /* A learner already on v1 must not be able to self-enrol in v2 as a separate course — they are
@@ -61,7 +61,7 @@ router.get('/dashboard', requireLogin, (req, res) => {
     if (!next) return null;
     const declined = db.prepare(`SELECT 1 FROM events WHERE user_id=? AND type='version_declined' AND payload=?`).get(req.user.id, String(next.id));
     if (declined) return null;
-    const s = pathLib.pathSummary(req.user.id, course.id);
+    const s = pathLib.pathSummary(req.user.id, course.id, req.user);
     return { course, next, percent: s.percent, done: s.done, total: s.total };
   }).filter(Boolean);
   res.render('dashboard', { title: 'My courses', mine, ended, catalog, due, updates, dueNow: require('../assign').nowLocal(), widgets: plugins.widgets('learnerDashboard', req.user) });
@@ -105,11 +105,11 @@ router.get('/courses/:id', requireLogin, (req, res) => {
   const course = q.courseById.get(req.params.id);
   if (!course) return res.status(404).render('error', { title: 'Not found', message: 'Course not found.' });
   const enrollment = q.enrollment.get(req.user.id, course.id);
-  if (req.user.role !== 'admin' && (!enrollment || enrollment.status !== 'active')) {
+  if (!pathLib.isStaff(req.user) && (!enrollment || enrollment.status !== 'active')) {
     if (enrollment && enrollment.status === 'ended') return res.status(403).render('error', { title: 'This course has ended', message: `Your access to "${course.title}" ended${enrollment.ends_on ? ' on ' + enrollment.ends_on : ''}. Your progress is saved — ask your teacher if you need it extended.` });
     return res.status(403).render('error', { title: 'No access', message: 'You are not enrolled in this course yet.' });
   }
-  const lp = pathLib.pathSummary(req.user.id, course.id);
+  const lp = pathLib.pathSummary(req.user.id, course.id, req.user);
   res.render('course', { title: course.title, course, lp, justDone: req.query.done || null, quizEnabled: pathLib.quizEnabled(),
                          widgets: plugins.widgets('results', req.user, course) });
 });
@@ -119,10 +119,19 @@ function stepFor(req, res) {
   const course = q.courseById.get(req.params.id);
   if (!course) { res.status(404).render('error', { title: 'Not found', message: 'Course not found.' }); return null; }
   const enrollment = q.enrollment.get(req.user.id, course.id);
-  if (req.user.role !== 'admin' && (!enrollment || enrollment.status !== 'active')) { res.status(403).render('error', { title: enrollment && enrollment.status === 'ended' ? 'This course has ended' : 'No access', message: enrollment && enrollment.status === 'ended' ? 'Your access to this course has ended. Your progress is saved.' : 'You are not enrolled in this course.' }); return null; }
+  if (!pathLib.isStaff(req.user) && (!enrollment || enrollment.status !== 'active')) { res.status(403).render('error', { title: enrollment && enrollment.status === 'ended' ? 'This course has ended' : 'No access', message: enrollment && enrollment.status === 'ended' ? 'Your access to this course has ended. Your progress is saved.' : 'You are not enrolled in this course.' }); return null; }
   const step = pathLib.pathSummary(req.user.id, course.id).steps.find(s => String(s.id) === String(req.params.stepId));
   if (!step) { res.status(404).render('error', { title: 'Not found', message: 'That step no longer exists.' }); return null; }
-  if (step.locked && req.user.role !== 'admin') { flash(req, 'error', `Finish "${step.blockedBy ? step.blockedBy.title : 'the previous step'}" first — this course goes in order.`); res.redirect(`/courses/${course.id}`); return null; }
+  /* Teacher material and in-class quizzes are not the learner's to open — an assignment is how a
+     quiz reaches them at home (it carries its own link), so the path itself stays closed. */
+  if (!pathLib.isStaff(req.user) && (step.audience || 'student') !== 'student') {
+    res.status(403).render('error', { title: 'Not available',
+      message: step.audience === 'teacher'
+        ? 'That part of the course is for teachers.'
+        : 'Your teacher runs this quiz in class. If it is set as homework you will find it in your Due list.' });
+    return null;
+  }
+  if (step.locked && !pathLib.isStaff(req.user)) { flash(req, 'error', `Finish "${step.blockedBy ? step.blockedBy.title : 'the previous step'}" first — this course goes in order.`); res.redirect(`/courses/${course.id}`); return null; }
   return { course, step };
 }
 // "Continue" / step button: go wherever the step lives
@@ -184,10 +193,17 @@ router.get('/courses/:id/play/:scoId', requireLogin, (req, res) => {
   const sco = q.scoById.get(req.params.scoId);
   if (!course || !sco || sco.course_id !== course.id) return res.status(404).render('error', { title: 'Not found', message: 'SCO not found.' });
   const enrollment = q.enrollment.get(req.user.id, course.id);
-  if (req.user.role !== 'admin' && (!enrollment || enrollment.status !== 'active')) {
+  if (!pathLib.isStaff(req.user) && (!enrollment || enrollment.status !== 'active')) {
     return res.status(403).render('error', { title: 'No access', message: 'You are not enrolled in this course.' });
   }
-  if (course.sequential && req.user.role !== 'admin') {   // locked sequence: the lesson's step must be reachable
+  /* A lesson that belongs to a teacher-only step is not servable to a learner either. */
+  if (!pathLib.isStaff(req.user)) {
+    const own = pathLib.stepsFor(course.id).find(s2 => s2.type === 'sco' && String(s2.config.sco_id) === String(sco.id));
+    if (own && (own.audience || 'student') !== 'student') {
+      return res.status(403).render('error', { title: 'Not available', message: 'That part of the course is for teachers.' });
+    }
+  }
+  if (course.sequential && !pathLib.isStaff(req.user)) {   // locked sequence: the lesson's step must be reachable
     const st = pathLib.pathSummary(req.user.id, course.id).steps.find(s => s.type === 'sco' && String(s.config.sco_id) === String(sco.id));
     if (st && st.locked) { flash(req, 'error', `Finish "${st.blockedBy ? st.blockedBy.title : 'the previous step'}" first — this course goes in order.`); return res.redirect(`/courses/${course.id}`); }
   }

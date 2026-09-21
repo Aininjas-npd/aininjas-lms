@@ -34,12 +34,36 @@ const QUIZ_API = onesite.quiz.api;          // server-to-server (Railway private
 const LAUNCH_SECRET = process.env.QUIZ_LAUNCH_SECRET || '';
 const quizEnabled = () => !!(QUIZ_API && LAUNCH_SECRET);
 
+/* Who a step is for.
+     student  — in the learner's path (the default for lessons, notebooks and notes)
+     teacher  — staff only: lesson plans, answer keys, the teacher's copy of a script.
+                Learners never see it and cannot open it, and it is left out of their progress.
+     class    — done together in class: a quiz the teacher runs live, or that you push to a class
+                as homework through Assignments. Not in the learner's path until then.
+   Quiz steps default to `class`, because a quiz a student can sit alone at any time is a different
+   thing from the one the teacher runs on the projector. */
+const AUDIENCES = ['student', 'teacher', 'class'];
+const defaultAudience = type => (type === 'quiz' ? 'class' : 'student');
+function ensureAudience() {
+  const cols = db.prepare('PRAGMA table_info(path_steps)').all().map(c => c.name);
+  if (!cols.includes('audience')) {
+    db.exec("ALTER TABLE path_steps ADD COLUMN audience TEXT NOT NULL DEFAULT 'student'");
+    // existing quiz steps keep working as they were: visible to students
+    db.exec("UPDATE path_steps SET audience='student'");
+  }
+}
+ensureAudience();
+
+const isStaff = user => !!user && ['admin', 'teacher', 'school_admin'].includes(user.role);
+/** Steps this viewer may see: staff see everything, a learner sees only their own. */
+const visibleTo = (steps, user) => isStaff(user) ? steps : steps.filter(s => (s.audience || 'student') === 'student');
+
 const TYPE_LABEL = { sco: 'Learn', quiz: 'Check', colab: 'Practice', note: 'Read' };
 const TYPE_ICON = { sco: '▶', quiz: '✓', colab: '{ }', note: '¶' };
 
 function shape(row) {
   let config = {}; try { config = JSON.parse(row.config || '{}'); } catch {}
-  const out = { ...row, config, kind: TYPE_LABEL[row.type] || row.type, icon: TYPE_ICON[row.type] || '•', custom: true };
+  const out = { ...row, config, audience: row.audience || 'student', kind: TYPE_LABEL[row.type] || row.type, icon: TYPE_ICON[row.type] || '•', custom: true };
   if (row.type === 'sco') { const sco = q.scoById.get(config.sco_id); out.pkg = sco ? (sco.package_title || '') : ''; out.missing = !sco; }
   return out;
 }
@@ -53,8 +77,9 @@ function stepsFor(courseId) {
 const hasCustomPath = courseId => db.prepare('SELECT COUNT(*) n FROM path_steps WHERE course_id=?').get(courseId).n > 0;
 
 /** Per-student view of the path: each step with status/score, overall percent, and the next step to do. */
-function pathSummary(userId, courseId) {
-  const steps = stepsFor(courseId);
+function pathSummary(userId, courseId, viewer) {
+  /* A learner's path — and their percentage — counts only the steps meant for them. Staff see all. */
+  const steps = viewer === undefined ? stepsFor(courseId) : visibleTo(stepsFor(courseId), viewer);
   const prog = db.prepare('SELECT * FROM step_progress WHERE user_id=?').all(userId);
   const out = steps.map(st => {
     let status = 'todo', score = null, detail = null, notebook = null, when = null;
@@ -88,9 +113,16 @@ function pathSummary(userId, courseId) {
 }
 
 /* ---------- admin: edit steps ---------- */
-function addStep(courseId, { type, title, config }) {
+function setAudience(stepId, audience) {
+  const a = AUDIENCES.includes(audience) ? audience : 'student';
+  db.prepare('UPDATE path_steps SET audience=? WHERE id=?').run(a, stepId);
+  return a;
+}
+
+function addStep(courseId, { type, title, config, audience }) {
   const max = db.prepare('SELECT COALESCE(MAX(sort_order), -1) m FROM path_steps WHERE course_id=?').get(courseId).m;
-  return db.prepare('INSERT INTO path_steps (course_id, sort_order, type, title, config) VALUES (?, ?, ?, ?, ?)').run(courseId, max + 1, type, title, JSON.stringify(config || {})).lastInsertRowid;
+  const aud = AUDIENCES.includes(audience) ? audience : defaultAudience(type);
+  return db.prepare('INSERT INTO path_steps (course_id, sort_order, type, title, config, audience) VALUES (?, ?, ?, ?, ?, ?)').run(courseId, max + 1, type, title, JSON.stringify(config || {}), aud).lastInsertRowid;
 }
 /** First customisation of a course: copy its SCORM lessons in as real steps so the admin can interleave quizzes/Colab. */
 function materialise(courseId) {
@@ -216,4 +248,4 @@ function classGrid(courseId) {
   return { steps, rows: learners.map(u => ({ user: u, summary: pathSummary(u.id, courseId) })) };
 }
 
-module.exports = { stepsFor, hasCustomPath, pathSummary, addStep, materialise, moveStep, reorder, moveTo, deleteStep, clearPath, updateStep, listQuizzes, launchUrl, liveJoinUrl, applyQuizResult, markStarted, markDone, classGrid, quizEnabled, QUIZ_URL, TYPE_LABEL };
+module.exports = { AUDIENCES, defaultAudience, isStaff, visibleTo, setAudience, stepsFor, hasCustomPath, pathSummary, addStep, materialise, moveStep, reorder, moveTo, deleteStep, clearPath, updateStep, listQuizzes, launchUrl, liveJoinUrl, applyQuizResult, markStarted, markDone, classGrid, quizEnabled, QUIZ_URL, TYPE_LABEL };

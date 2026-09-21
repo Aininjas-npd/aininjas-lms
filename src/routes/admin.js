@@ -165,8 +165,8 @@ router.post('/courses/:id/path/steps', nbUpload.single('notebook'), (req, res) =
   const b = req.body, type = String(b.type || '');
   try {
     pathLib.materialise(course.id);
-    if (type === 'sco') { const sco = q.scoById.get(+b.sco_id); if (!sco || sco.course_id !== course.id) throw new Error('Pick a lesson'); pathLib.addStep(course.id, { type, title: b.title || sco.title, config: { sco_id: sco.id } }); }
-    else if (type === 'quiz') { if (!b.quiz_id) throw new Error('Pick a quiz'); const [qid, qtitle] = String(b.quiz_id).split('|'); pathLib.addStep(course.id, { type, title: b.title || qtitle || 'Quiz', config: { quiz_id: +qid, quiz_title: qtitle || '' } }); }
+    if (type === 'sco') { const sco = q.scoById.get(+b.sco_id); if (!sco || sco.course_id !== course.id) throw new Error('Pick a lesson'); pathLib.addStep(course.id, { type, title: b.title || sco.title, config: { sco_id: sco.id }, audience: b.audience }); }
+    else if (type === 'quiz') { if (!b.quiz_id) throw new Error('Pick a quiz'); const [qid, qtitle] = String(b.quiz_id).split('|'); pathLib.addStep(course.id, { type, title: b.title || qtitle || 'Quiz', config: { quiz_id: +qid, quiz_title: qtitle || '' }, audience: b.audience }); }
     else if (type === 'colab') {
       // Two ways to hand out a notebook: upload the .ipynb (students download it and upload to their own Colab — no link to your
       // Drive, no "authored by …" warning, no sessions on your account), or a shared Colab link (the old way).
@@ -174,13 +174,13 @@ router.post('/courses/:id/path/steps', nbUpload.single('notebook'), (req, res) =
         if (!/\.ipynb$/i.test(req.file.originalname || '')) { fs.unlinkSync(req.file.path); throw new Error('Upload a Jupyter/Colab notebook file (.ipynb)'); }
         try { JSON.parse(fs.readFileSync(req.file.path, 'utf8')); } catch { fs.unlinkSync(req.file.path); throw new Error('That file is not a valid notebook (.ipynb is JSON)'); }
         const safe = req.file.originalname.replace(/[^\w.\- ]+/g, '_');
-        pathLib.addStep(course.id, { type, title: b.title || safe.replace(/\.ipynb$/i, ''), config: { file: path.basename(req.file.path), filename: safe, instructions: b.instructions || '' } });
+        pathLib.addStep(course.id, { type, title: b.title || safe.replace(/\.ipynb$/i, ''), config: { file: path.basename(req.file.path), filename: safe, instructions: b.instructions || '' }, audience: b.audience });
       } else {
         if (!/^https?:\/\//i.test(b.url || '')) throw new Error('Upload the notebook file (.ipynb) or paste a Colab link');
-        pathLib.addStep(course.id, { type, title: b.title || 'Hands-on: Python in Colab', config: { url: b.url.trim(), instructions: b.instructions || '' } });
+        pathLib.addStep(course.id, { type, title: b.title || 'Hands-on: Python in Colab', config: { url: b.url.trim(), instructions: b.instructions || '' }, audience: b.audience });
       }
     }
-    else if (type === 'note') { if (!b.instructions) throw new Error('Write the note text'); pathLib.addStep(course.id, { type, title: b.title || 'Read this first', config: { html: b.instructions } }); }
+    else if (type === 'note') { if (!b.instructions) throw new Error('Write the note text'); pathLib.addStep(course.id, { type, title: b.title || 'Read this first', config: { html: b.instructions }, audience: b.audience }); }
     else throw new Error('Unknown step type');
     if (b.after !== undefined && b.after !== '' && b.after !== 'end') {   // "Insert after step N" (0 = at the start)
       const last = db.prepare('SELECT id FROM path_steps WHERE course_id=? ORDER BY sort_order DESC, id DESC LIMIT 1').get(course.id);
@@ -202,6 +202,12 @@ router.post('/courses/:id/path/steps/:stepId/:action', (req, res) => {
   else if (action === 'moveto') pathLib.moveTo(+req.params.id, +stepId, +req.body.position || 1);
   else if (action === 'delete') pathLib.deleteStep(+stepId);
   else if (action === 'rename') pathLib.updateStep(+stepId, { title: String(req.body.title || '').trim() });
+  else if (action === 'audience') {
+    const a = pathLib.setAudience(+stepId, String(req.body.audience || 'student'));
+    flash(req, 'success', a === 'student' ? 'Students see this step in their course.'
+      : a === 'teacher' ? 'Teachers only — students will not see this step at all.'
+      : 'In class only — students see it when you run it live or set it as homework.');
+  }
   res.redirect(`/admin/courses/${req.params.id}/path`);
 });
 router.post('/courses/:id/path/sequential', (req, res) => {

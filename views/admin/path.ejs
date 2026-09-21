@@ -29,6 +29,18 @@
           <% if (s.type === 'quiz') { %>Quiz Studio #<%= s.config.quiz_id %> <%= s.config.quiz_title ? '· ' + s.config.quiz_title : '' %><% } %>
           <% if (s.type === 'colab') { %><% if (s.config.file) { %>📓 <%= s.config.filename %> <span class="muted">(students download &amp; upload to their Colab)</span><% } else { %><a href="<%= s.config.url %>" target="_blank" rel="noopener"><%= s.config.url %></a><% } %><% } %>
         </p>
+        <% if (s.custom) { %>
+        <form method="post" action="/admin/courses/<%= course.id %>/path/steps/<%= s.id %>/audience" class="row gap" style="margin-top:4px">
+          <label class="small muted" for="aud-<%= s.id %>">Who sees this</label>
+          <select id="aud-<%= s.id %>" name="audience" onchange="this.form.submit()" style="max-width:260px">
+            <option value="student" <%= (s.audience || 'student') === 'student' ? 'selected' : '' %>>Students — in their course</option>
+            <option value="class" <%= s.audience === 'class' ? 'selected' : '' %>>In class only — live, or set as homework</option>
+            <option value="teacher" <%= s.audience === 'teacher' ? 'selected' : '' %>>Teachers only — hidden from students</option>
+          </select>
+          <% if (s.audience === 'teacher') { %><span class="badge">staff only</span><% } %>
+          <% if (s.audience === 'class') { %><span class="badge">in class</span><% } %>
+        </form>
+        <% } %>
       </div>
       <% if (s.custom) { %>
       <div class="act actions">
@@ -47,13 +59,20 @@
   <form class="card" method="post" action="/admin/courses/<%= course.id %>/path/steps" id="addstep" enctype="multipart/form-data">
     <h3>Add a step</h3>
     <div class="field"><label>Type</label>
-      <select name="type" id="stype" onchange="document.querySelectorAll('#addstep [data-for]').forEach(d=>d.hidden=d.dataset.for!==this.value)">
+      <select name="type" id="stype" onchange="document.querySelectorAll('#addstep [data-for]').forEach(d=>d.hidden=d.dataset.for!==this.value); document.getElementById('saud').value = this.value === 'quiz' ? 'class' : 'student';">
         <option value="sco">Learn — SCORM lesson</option>
         <option value="colab">Practice — Google Colab notebook</option>
         <option value="quiz">Check — Quiz Studio quiz</option>
         <option value="note">Read — a short note / instructions</option>
       </select></div>
     <div class="field"><label>Title <span class="muted">(optional — shown to students)</span></label><input type="text" name="title" placeholder="e.g. Level 1 · Loops in Python"></div>
+    <div class="field"><label>Who sees this step</label>
+      <select name="audience" id="saud">
+        <option value="student">Students — in their course</option>
+        <option value="class">In class only — the teacher runs it live, or you set it as homework</option>
+        <option value="teacher">Teachers only — hidden from students</option>
+      </select>
+      <div class="hint">A quiz defaults to <b>in class only</b>: students never see it in their path, the teacher runs it live, and results still reach the gradebook. Put lesson plans, answer keys and the teacher's copy of a script on <b>teachers only</b>.</div></div>
     <div class="field"><label>Position</label>
       <select name="after"><option value="end">At the end</option><option value="0">At the start</option><% steps.forEach((s, i) => { %><option value="<%= i + 1 %>">After <%= i + 1 %>. <%= s.title %></option><% }) %></select></div>
     <div data-for="sco" class="field"><label>Lesson</label><% if (!scos.length) { %><p class="muted small">No lessons yet — upload a SCORM package in the box on the right; its lessons are added to the path automatically.</p><% } else { %><select name="sco_id"><% scos.forEach(s => { %><option value="<%= s.id %>"><%= s.title %><%= s.package_title ? ' (' + s.package_title + ')' : '' %></option><% }) %></select><div class="hint">Use this to place a lesson a second time or re-add one you removed.</div><% } %></div>

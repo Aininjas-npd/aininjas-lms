@@ -200,3 +200,11 @@ Students see marks and comments only once the teacher **releases** them (spec de
 **Closing a course, and updating one.** The Published toggle on **Admin → Courses** now reads **open to new learners / closed to new enrolment**, because that is what it does: closing a course removes it from the catalogue, from bulk and scheduled enrolment and from the home page, while **every learner already enrolled keeps full access and their progress**. The row shows how many that is.
 
 To change a course people are already working through, press **+ New version** (optionally saying what changed). That copies the course, its learning path, its lessons and its files as v2: v1 closes to new enrolment and its learners carry on untouched, v2 is published and is what new learners enrol in. Learners on v1 see an offer on their dashboard — what changed, how far through they are, and that switching restarts them at 0% with their old progress kept — plus a **Stay on this one** button that stops the offer coming back. The catalogue never shows a learner a second version of a course they are already in. Each version keeps its own copy of the package files, so check **Storage** on the admin dashboard before versioning a large course; if the volume cannot hold the copy, the attempt is refused with the numbers and nothing is changed.
+
+**Who each step is for.** Every step on a learning path carries an audience, set when you add it and changeable any time on the path editor:
+
+- **Students** — appears in the learner's course. The default for lessons, notebooks and notes.
+- **In class only** — the default for a **quiz**. Students never see it in their path: the teacher runs it live from Quiz Studio, or you push it to a class through **Assignments** as homework, where it turns up in their Due list. Results reach Results and the gradebook either way.
+- **Teachers only** — lesson plans, answer keys, the teacher's copy of a script. Learners never see it, and cannot open it by URL or by guessing a lesson address.
+
+A learner's progress counts only their own steps, so a course of two student steps plus a lesson plan and an in-class quiz reads 50% after one step, not 25%. Teachers and school admins see the whole path — including the teacher-only steps — without being enrolled, which is how they reach the plan and the projector copy of a lesson.
