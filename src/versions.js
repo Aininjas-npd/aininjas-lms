@@ -119,14 +119,14 @@ function newVersion(courseId, { note } = {}) {
         let cfg = {};
         try { cfg = JSON.parse(st.config || '{}'); } catch { cfg = {}; }
         if (cfg.sco_id && scoMap.has(cfg.sco_id)) cfg.sco_id = scoMap.get(cfg.sco_id);
-        db.prepare('INSERT INTO path_steps (course_id, sort_order, type, title, config) VALUES (?, ?, ?, ?, ?)')
-          .run(newId, st.sort_order, st.type, st.title, JSON.stringify(cfg));
+        db.prepare('INSERT INTO path_steps (course_id, sort_order, type, title, config, audience) VALUES (?, ?, ?, ?, ?, ?)')
+          .run(newId, st.sort_order, st.type, st.title, JSON.stringify(cfg), st.audience || 'student');
       }
 
-      // which schools may see it, when that table exists
+      // which schools the course is offered to (see enrol.js: course_schools)
       try {
-        for (const a of db.prepare('SELECT * FROM course_availability WHERE course_id=?').all(src.id))
-          db.prepare('INSERT OR IGNORE INTO course_availability (course_id, school_slug) VALUES (?, ?)').run(newId, a.school_slug);
+        for (const a of db.prepare('SELECT school_slug FROM course_schools WHERE course_id=?').all(src.id))
+          db.prepare('INSERT OR IGNORE INTO course_schools (course_id, school_slug) VALUES (?, ?)').run(newId, a.school_slug);
       } catch { /* no such table in this install */ }
 
       db.prepare('UPDATE courses SET is_published=0, superseded_by=? WHERE id=?').run(newId, src.id);

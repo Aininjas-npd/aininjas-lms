@@ -10,6 +10,20 @@ const brand = require('../brand');
 const router = express.Router();
 const baseUrl = req => (process.env.BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
 
+
+/* May this person open this course?
+     a learner — only with a live enrolment
+     a teacher / school admin — without enrolling, but only for a course offered to THEIR school
+       (a course with no school restriction is offered to everyone, as elsewhere)
+     the AI Ninjas admin — everything */
+function mayOpenCourse(user, course, enrollment) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  if (pathLib.isStaff(user)) return require('../enrol').courseOpenTo(course.id, user.school_slug);
+  return !!enrollment && enrollment.status === 'active';
+}
+
+
 router.get('/', (req, res) => {
   if (req.user && req.user.status === 'approved') return res.redirect(homeFor(req.user));
   res.render('home', { title: res.locals.brand ? res.locals.brand.name : 'AI Ninjas Academy', courses: q.courses.all().filter(c => c.is_published) });
@@ -105,7 +119,7 @@ router.get('/courses/:id', requireLogin, (req, res) => {
   const course = q.courseById.get(req.params.id);
   if (!course) return res.status(404).render('error', { title: 'Not found', message: 'Course not found.' });
   const enrollment = q.enrollment.get(req.user.id, course.id);
-  if (!pathLib.isStaff(req.user) && (!enrollment || enrollment.status !== 'active')) {
+  if (!mayOpenCourse(req.user, course, enrollment)) {
     if (enrollment && enrollment.status === 'ended') return res.status(403).render('error', { title: 'This course has ended', message: `Your access to "${course.title}" ended${enrollment.ends_on ? ' on ' + enrollment.ends_on : ''}. Your progress is saved — ask your teacher if you need it extended.` });
     return res.status(403).render('error', { title: 'No access', message: 'You are not enrolled in this course yet.' });
   }
@@ -119,7 +133,7 @@ function stepFor(req, res) {
   const course = q.courseById.get(req.params.id);
   if (!course) { res.status(404).render('error', { title: 'Not found', message: 'Course not found.' }); return null; }
   const enrollment = q.enrollment.get(req.user.id, course.id);
-  if (!pathLib.isStaff(req.user) && (!enrollment || enrollment.status !== 'active')) { res.status(403).render('error', { title: enrollment && enrollment.status === 'ended' ? 'This course has ended' : 'No access', message: enrollment && enrollment.status === 'ended' ? 'Your access to this course has ended. Your progress is saved.' : 'You are not enrolled in this course.' }); return null; }
+  if (!mayOpenCourse(req.user, course, enrollment)) { res.status(403).render('error', { title: enrollment && enrollment.status === 'ended' ? 'This course has ended' : 'No access', message: enrollment && enrollment.status === 'ended' ? 'Your access to this course has ended. Your progress is saved.' : 'You are not enrolled in this course.' }); return null; }
   const step = pathLib.pathSummary(req.user.id, course.id).steps.find(s => String(s.id) === String(req.params.stepId));
   if (!step) { res.status(404).render('error', { title: 'Not found', message: 'That step no longer exists.' }); return null; }
   /* Teacher material and in-class quizzes are not the learner's to open — an assignment is how a
@@ -193,7 +207,7 @@ router.get('/courses/:id/play/:scoId', requireLogin, (req, res) => {
   const sco = q.scoById.get(req.params.scoId);
   if (!course || !sco || sco.course_id !== course.id) return res.status(404).render('error', { title: 'Not found', message: 'SCO not found.' });
   const enrollment = q.enrollment.get(req.user.id, course.id);
-  if (!pathLib.isStaff(req.user) && (!enrollment || enrollment.status !== 'active')) {
+  if (!mayOpenCourse(req.user, course, enrollment)) {
     return res.status(403).render('error', { title: 'No access', message: 'You are not enrolled in this course.' });
   }
   /* A lesson that belongs to a teacher-only step is not servable to a learner either. */
