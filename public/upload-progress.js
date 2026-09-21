@@ -56,8 +56,18 @@
         foot.textContent = 'A large package can take a minute to unpack. This page will move on by itself.';
       };
       xhr.onload = function () {
-        // The server answers with its usual redirect; the browser followed it for us.
-        window.location.href = xhr.responseURL || window.location.href;
+        /* The server answered with its usual redirect and the browser followed it, so what we hold
+           is the finished page — flash message and all. Navigating to that URL again would fetch it
+           a second time and the flash, already consumed, would be gone. So show what we were given
+           and just correct the address bar. */
+        var url = xhr.responseURL || window.location.href;
+        var html = xhr.responseText;
+        if (html && /^\s*<(!doctype|html)/i.test(html)) {
+          try { window.history.replaceState(null, '', url); } catch (e) { /* different origin */ }
+          document.open(); document.write(html); document.close();
+        } else {
+          window.location.href = url;
+        }
       };
       xhr.onerror = function () {
         box.className = 'up-box err';

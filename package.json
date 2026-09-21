@@ -12,7 +12,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "adm-zip": "^0.6.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
     "cookie-parser": "^1.4.7",
@@ -21,7 +20,8 @@
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "fast-xml-parser": "^5.11.1",
-    "multer": "^2.3.0"
+    "multer": "^2.3.0",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
     "playwright": "^1.62.1"

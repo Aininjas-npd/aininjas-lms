@@ -15,7 +15,22 @@ const stepfiles = require('../stepfiles');
 
 const router = express.Router();
 router.use(requireAdmin);
-const upload = multer({ dest: path.join(DATA_DIR, 'uploads'), limits: { fileSize: 1024 * 1024 * 1024 } }); // 1 GB
+/* The package is streamed to disk on the way in and streamed out of the zip on the way through,
+   so the ceiling is disk, not memory. MAX_PACKAGE_MB overrides it (default 4 GB). */
+const MAX_PACKAGE_MB = Math.max(50, parseInt(process.env.MAX_PACKAGE_MB, 10) || 4096);
+const upload = multer({ dest: path.join(DATA_DIR, 'uploads'), limits: { fileSize: MAX_PACKAGE_MB * 1024 * 1024 } });
+/* Say "too big" in words, at the point of failure, instead of an error page after a long upload. */
+const packageUpload = (req, res, next) => upload.single('package')(req, res, err => {
+  if (!err) return next();
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    flash(req, 'error', `That package is larger than the ${MAX_PACKAGE_MB >= 1024 ? (MAX_PACKAGE_MB / 1024) + ' GB' : MAX_PACKAGE_MB + ' MB'} limit. `
+      + 'Re-publish it with the video hosted outside the package, split it into smaller packages, or raise MAX_PACKAGE_MB — and check Storage on the dashboard, since the unpacked course needs room too.');
+  } else {
+    console.error('[upload]', err);
+    flash(req, 'error', `Upload failed: ${err.message}`);
+  }
+  res.redirect(req.params.id ? `/admin/courses/${req.params.id}/path` : '/admin/courses');
+});
 
 router.get('/', (req, res) => {
   const stats = {
@@ -79,11 +94,11 @@ router.get('/courses', (req, res) => {
 });
 
 // Create a course — with or without a SCORM package. More packages/quizzes/notebooks are added on its learning-path page.
-router.post('/courses/upload', upload.single('package'), (req, res) => {
+router.post('/courses/upload', packageUpload, async (req, res) => {
   try {
     let course;
     if (req.file) {
-      course = importPackage(req.file.path, { title: req.body.title, description: req.body.description, openEnrollment: req.body.open_enrollment === 'on' });
+      course = await importPackage(req.file.path, { title: req.body.title, description: req.body.description, openEnrollment: req.body.open_enrollment === 'on' });
       flash(req, 'success', `Created "${course.title}" with ${db.prepare('SELECT COUNT(*) n FROM scos WHERE course_id=?').get(course.id).n} lesson(s). Add quizzes, notebooks or more packages on its learning path.`);
     } else {
       course = createCourse({ title: req.body.title, description: req.body.description, openEnrollment: req.body.open_enrollment === 'on' });
@@ -98,13 +113,13 @@ router.post('/courses/upload', upload.single('package'), (req, res) => {
   res.redirect('/admin/courses');
 });
 // Add a SCORM package to an existing course → its lessons become Learn steps at the end of the path
-router.post('/courses/:id/packages', upload.single('package'), (req, res) => {
+router.post('/courses/:id/packages', packageUpload, async (req, res) => {
   const course = q.courseById.get(req.params.id);
   if (!course) return res.status(404).render('error', { title: 'Not found', message: 'Course not found.' });
   if (!req.file) { flash(req, 'error', 'Choose a .zip SCORM 1.2 package.'); return res.redirect(`/admin/courses/${course.id}/path`); }
   try {
     const custom = pathLib.hasCustomPath(course.id);
-    const scos = addPackageToCourse(course.id, req.file.path, { title: req.body.title });
+    const scos = await addPackageToCourse(course.id, req.file.path, { title: req.body.title });
     if (custom) scos.forEach(s => pathLib.addStep(course.id, { type: 'sco', title: s.title, config: { sco_id: s.id } }));
     q.logEvent.run(req.user.id, course.id, null, 'package_added', JSON.stringify({ title: scos[0] && scos[0].package_title, lessons: scos.length }));
     flash(req, 'success', `Added "${scos[0].package_title}" — ${scos.length} lesson(s) appended to the path.`);

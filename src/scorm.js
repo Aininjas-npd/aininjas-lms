@@ -1,5 +1,11 @@
 // SCORM 1.2 package handling: unzip, parse imsmanifest.xml, register SCOs.
-const AdmZip = require('adm-zip');
+//
+// The zip is read STREAMING, straight from the uploaded temp file: yauzl walks the central
+// directory (names and sizes only), we read imsmanifest.xml on its own, then each entry is piped
+// to disk one at a time. Memory stays flat whatever the package weighs — the old adm-zip path
+// held the entire archive, and then every extracted file, in RAM, which is what killed the
+// container on large courses.
+const yauzl = require('yauzl');
 const storage = require('./storage');
 const path = require('path');
 const fs = require('fs');
@@ -30,20 +36,66 @@ function createCourse({ title, description, openEnrollment } = {}) {
 }
 
 /** Parse a SCORM 1.2 zip. Returns { entries, prefix, manifest, tree, scos, title, description, schemaversion }. */
-function parsePackage(zipPath, { title, description } = {}) {
-  const zip = new AdmZip(zipPath);
-  const entries = zip.getEntries();
-  const manifestEntry = entries.find(e => /(^|\/)imsmanifest\.xml$/i.test(e.entryName));
-  if (!manifestEntry) throw new Error('Not a SCORM package: imsmanifest.xml not found in the zip.');
-  // Packages sometimes have a single top-level folder; strip that prefix.
-  const prefix = manifestEntry.entryName.replace(/imsmanifest\.xml$/i, '');
+/** Open a zip for streaming reads. */
+const openZip = zipPath => new Promise((resolve, reject) =>
+  yauzl.open(zipPath, { lazyEntries: true, autoClose: false }, (err, zip) => err ? reject(err) : resolve(zip)));
 
-  const xml = parser.parse(manifestEntry.getData().toString('utf8'));
+/** Walk the central directory once. Returns [{ name, size, dir }] — no file contents are read. */
+function listEntries(zip) {
+  return new Promise((resolve, reject) => {
+    const out = [];
+    zip.on('entry', e => { out.push({ name: e.fileName, size: e.uncompressedSize, dir: /\/$/.test(e.fileName), raw: e }); zip.readEntry(); });
+    zip.on('end', () => resolve(out));
+    zip.on('error', reject);
+    zip.readEntry();
+  });
+}
+
+/** Read one entry into memory — only ever used for imsmanifest.xml. */
+function readEntry(zip, entry, limit = 8 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    if (entry.size > limit) return reject(new Error('imsmanifest.xml is implausibly large — is this really a SCORM package?'));
+    zip.openReadStream(entry.raw, (err, rs) => {
+      if (err) return reject(err);
+      const chunks = [];
+      rs.on('data', c => chunks.push(c));
+      rs.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      rs.on('error', reject);
+    });
+  });
+}
+
+/** Pipe one entry to a file on disk, never holding it in memory. */
+function extractEntry(zip, entry, outPath) {
+  return new Promise((resolve, reject) => {
+    zip.openReadStream(entry.raw, (err, rs) => {
+      if (err) return reject(err);
+      const ws = fs.createWriteStream(outPath);
+      rs.on('error', reject);
+      ws.on('error', reject);
+      ws.on('close', resolve);
+      rs.pipe(ws);
+    });
+  });
+}
+
+async function parsePackage(zipPath, { title, description } = {}) {
+  let zip;
+  try { zip = await openZip(zipPath); }
+  catch (e) { throw new Error(`Could not open the package as a zip file (${e.message}).`); }
+  const entries = await listEntries(zip);
+  const manifestEntry = entries.find(e => /(^|\/)imsmanifest\.xml$/i.test(e.name));
+  if (!manifestEntry) { zip.close(); throw new Error('Not a SCORM package: imsmanifest.xml not found in the zip.'); }
+  // Packages sometimes have a single top-level folder; strip that prefix.
+  const prefix = manifestEntry.name.replace(/imsmanifest\.xml$/i, '');
+
+  const xml = parser.parse(await readEntry(zip, manifestEntry));
+  const bad = msg => { try { zip.close(); } catch {} return new Error(msg); };
   const manifest = xml.manifest;
-  if (!manifest) throw new Error('imsmanifest.xml has no <manifest> root.');
+  if (!manifest) throw bad('imsmanifest.xml has no <manifest> root.');
   const schemaversion = manifest.metadata?.schemaversion || manifest.metadata?.schema || '1.2';
   if (String(schemaversion).includes('2004') || String(schemaversion).includes('CAM')) {
-    throw new Error(`This looks like a SCORM 2004 package (schemaversion "${schemaversion}"). This LMS supports SCORM 1.2 — re-export the course as SCORM 1.2.`);
+    throw bad(`This looks like a SCORM 2004 package (schemaversion "${schemaversion}"). This LMS supports SCORM 1.2 — re-export the course as SCORM 1.2.`);
   }
 
   // ---- resources: identifier -> { href, base } ----
@@ -57,7 +109,7 @@ function parsePackage(zipPath, { title, description } = {}) {
   const orgs = manifest.organizations?.organization || [];
   const defaultOrgId = manifest.organizations?.['@_default'];
   const org = orgs.find(o => o['@_identifier'] === defaultOrgId) || orgs[0];
-  if (!org) throw new Error('imsmanifest.xml has no <organization>.');
+  if (!org) throw bad('imsmanifest.xml has no <organization>.');
   const courseTitle = title?.trim() || textOf(org.title) || textOf(manifest.metadata?.title) || 'Untitled course';
 
   const scos = [];
@@ -79,15 +131,15 @@ function parsePackage(zipPath, { title, description } = {}) {
       walk(it.item, depth + 1, node.children);
     }
   })(org.item, 0, tree);
-  if (!scos.length) throw new Error('No launchable SCOs (items with identifierref + resource href) found in manifest.');
-  return { entries, prefix, manifest, tree, scos, title: courseTitle, description: description || textOf(manifest.metadata?.description) || null, schemaversion: String(schemaversion) };
+  if (!scos.length) throw bad('No launchable SCOs (items with identifierref + resource href) found in manifest.');
+  return { zip, entries, prefix, manifest, tree, scos, title: courseTitle, description: description || textOf(manifest.metadata?.description) || null, schemaversion: String(schemaversion) };
 }
-/** Unpacked size of the entries we are about to write. */
+/** Unpacked size of the entries we are about to write (from the central directory — nothing is read). */
 function unpackedSize(entries, prefix) {
   let n = 0;
   for (const e of entries) {
-    if (e.isDirectory || !e.entryName.startsWith(prefix)) continue;
-    n += (e.header && e.header.size) || 0;
+    if (e.dir || !e.name.startsWith(prefix)) continue;
+    n += e.size || 0;
   }
   return n;
 }
@@ -105,18 +157,20 @@ function checkRoom(entries, prefix) {
   }
 }
 
-function writeFiles(entries, prefix, dest) {
+/** Write every entry under `prefix` to `dest`, one stream at a time. */
+async function writeFiles(zip, entries, prefix, dest) {
   checkRoom(entries, prefix);
   const fresh = !fs.existsSync(dest);
   fs.mkdirSync(dest, { recursive: true });
   try {
     for (const e of entries) {
-      if (e.isDirectory || !e.entryName.startsWith(prefix)) continue;
-      const rel = e.entryName.slice(prefix.length);
+      if (e.dir || !e.name.startsWith(prefix)) continue;
+      const rel = e.name.slice(prefix.length);
+      if (!rel) continue;
       const out = path.join(dest, rel);
-      if (!out.startsWith(dest)) continue;             // zip-slip guard
+      if (!out.startsWith(dest + path.sep)) continue;   // zip-slip guard
       fs.mkdirSync(path.dirname(out), { recursive: true });
-      fs.writeFileSync(out, e.getData());
+      await extractEntry(zip, e, out);
     }
   } catch (err) {
     // A half-written course is dead weight on a volume that is already short of room.
@@ -128,11 +182,12 @@ const insertSco = db.prepare(`INSERT INTO scos (course_id, identifier, title, la
                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
 
 /** Import a zip as a NEW course (the original behaviour). Returns the course row. */
-function importPackage(zipPath, { title, description, openEnrollment } = {}) {
-  const pk = parsePackage(zipPath, { title, description });
+async function importPackage(zipPath, { title, description, openEnrollment } = {}) {
+  const pk = await parsePackage(zipPath, { title, description });
+  try {
   let slug = slugify(pk.title), n = 1;
   while (q.courseBySlug.get(slug)) slug = `${slugify(pk.title)}-${++n}`;
-  writeFiles(pk.entries, pk.prefix, path.join(DATA_DIR, 'courses', slug));
+  await writeFiles(pk.zip, pk.entries, pk.prefix, path.join(DATA_DIR, 'courses', slug));
   const courseId = db.transaction(() => {
     const info = db.prepare(`INSERT INTO courses (slug, title, description, version, manifest_json, open_enrollment) VALUES (?, ?, ?, ?, ?, ?)`)
       .run(slug, pk.title, pk.description, pk.schemaversion, JSON.stringify(pk.tree), openEnrollment ? 1 : 0);
@@ -140,15 +195,17 @@ function importPackage(zipPath, { title, description, openEnrollment } = {}) {
     return info.lastInsertRowid;
   })();
   return q.courseById.get(courseId);
+  } finally { try { pk.zip.close(); } catch {} }
 }
 
 /** Add a zip's lessons to an EXISTING course (any number of packages per course). Returns the new SCO rows. */
-function addPackageToCourse(courseId, zipPath, { title } = {}) {
+async function addPackageToCourse(courseId, zipPath, { title } = {}) {
   const course = q.courseById.get(courseId);
   if (!course) throw new Error('Course not found');
-  const pk = parsePackage(zipPath, { title });
+  const pk = await parsePackage(zipPath, { title });
+  try {
   const folder = 'pkg-' + Date.now().toString(36);
-  writeFiles(pk.entries, pk.prefix, path.join(DATA_DIR, 'courses', course.slug, folder));
+  await writeFiles(pk.zip, pk.entries, pk.prefix, path.join(DATA_DIR, 'courses', course.slug, folder));
   const start = db.prepare('SELECT COALESCE(MAX(sort_order), -1) m FROM scos WHERE course_id=?').get(course.id).m + 1;
   const ids = db.transaction(() => pk.scos.map((s, i) => {
     const ident = `${folder}:${s.identifier}`;   // identifiers are only unique within a package
@@ -156,6 +213,7 @@ function addPackageToCourse(courseId, zipPath, { title } = {}) {
   }))();
   if (!course.version) db.prepare('UPDATE courses SET version=? WHERE id=?').run(pk.schemaversion, course.id);
   return ids.map(id => q.scoById.get(id));
+  } finally { try { pk.zip.close(); } catch {} }
 }
 /** Remove one package (its files, SCOs and any path steps pointing at them). */
 function removePackage(courseId, folder) {
