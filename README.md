@@ -192,3 +192,5 @@ Grading happens on the assignment page (per student, per item, with a comment) o
 published item, inline entry, CSV export). Auto quiz marks show in italics and can be overridden; both values are kept.
 Students see marks and comments only once the teacher **releases** them (spec default). Tables: `assignments`,
 `assignment_items`, `assignment_submissions`, `grades`.
+
+**Uploading a package.** Course and package uploads show real progress — `Uploading The Disciple.zip — 34 MB of 92 MB (37%) · about 40 s left`, then `Unpacking…` while the server reads the manifest. Before writing anything the importer checks that the volume can hold the unpacked course and refuses with the actual numbers if it cannot; a failed import cleans up after itself rather than leaving a half-written course on the disk. The Admin dashboard's **Storage** card shows what is on the volume and clears abandoned upload temp files.

@@ -12,7 +12,7 @@
 </tbody></table>
 <details id="new" class="card" style="margin-top:18px"><summary style="cursor:pointer;font-weight:700">New course</summary>
   <p class="muted small">A course is a container: after creating it you build its learning path from any mix of SCORM lessons, Quiz Studio quizzes and Colab notebooks.</p>
-  <form method="post" action="/admin/courses/upload" enctype="multipart/form-data">
+  <form method="post" action="/admin/courses/upload" enctype="multipart/form-data" data-progress>
     <label>Title</label><input type="text" name="title" placeholder="e.g. Python Foundations — Grade 7" id="ctitle">
     <label>Description <span class="muted">(optional)</span></label><textarea name="description"></textarea>
     <label>Start with a SCORM 1.2 package <span class="muted">(optional — you can add packages later on the learning path)</span></label><input type="file" name="package" accept=".zip" onchange="document.getElementById('ctitle').required=!this.files.length">
@@ -20,5 +20,6 @@
     <p><button class="btn">Create course</button></p>
   </form>
 </details>
+<script src="/upload-progress.js"></script>
 <script>if (location.hash === '#new') document.getElementById('new').open = true;</script>
 <%- include('../partials/footer') %>

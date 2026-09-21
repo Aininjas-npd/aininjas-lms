@@ -79,7 +79,7 @@
     <% if (!packages.length) { %><p class="muted small">None yet.</p><% } %>
     <% packages.forEach(pk => { %><div class="row between" style="margin-bottom:6px"><span><b><%= pk.title %></b> <span class="muted small">· <%= pk.count %> lesson<%= pk.count === 1 ? '' : 's' %></span></span>
       <form method="post" action="/admin/courses/<%= course.id %>/packages/remove" class="inline" onsubmit="return confirm('Remove this package, its lessons and their steps? Learner progress on those lessons is lost.')"><input type="hidden" name="folder" value="<%= pk.folder %>"><button class="link small" type="submit">remove</button></form></div><% }) %>
-    <form method="post" action="/admin/courses/<%= course.id %>/packages" enctype="multipart/form-data" style="margin-top:12px">
+    <form method="post" action="/admin/courses/<%= course.id %>/packages" enctype="multipart/form-data" data-progress style="margin-top:12px">
       <label>Add a SCORM 1.2 package (.zip)</label><input type="file" name="package" accept=".zip" required>
       <label>Package name <span class="muted">(optional — defaults to the manifest title)</span></label><input type="text" name="title" placeholder="e.g. Module 2 · Variables">
       <p><button class="btn small" type="submit">Upload & add lessons to the path</button></p>
@@ -114,4 +114,5 @@
   function toast(msg, err) { var t = document.getElementById('ordertoast'); if (!t) { t = document.createElement('div'); t.id = 'ordertoast'; t.className = 'ordertoast'; document.body.appendChild(t); } t.textContent = msg; t.classList.toggle('err', !!err); t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove('show'); }, 1800); }
 })();
 </script>
+<script src="/upload-progress.js"></script>
 <%- include('../partials/footer') %>
