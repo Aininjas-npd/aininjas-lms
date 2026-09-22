@@ -18,6 +18,7 @@ function navFor(user, path = '', pluginNav = [], viewing = false) {
   if (staff && onesite.quiz.configured && !viewing) items.push({ href: onesite.quiz.on ? onesite.quiz.prefix + '/admin' : onesite.quiz.public + '/admin', label: 'Assessments', on: on(p => p.startsWith(onesite.quiz.prefix + '/') || p === onesite.quiz.prefix) });
   if (user.role === 'admin') {
     items.push({ href: '/admin/courses', label: 'Courses', on: on(p => p.startsWith('/admin/courses')) });
+    items.push({ href: '/admin/curricula', label: 'Curricula', on: on(p => p.startsWith('/admin/curricula')) });
     items.push({ href: '/admin/users', label: 'Users', on: on(p => p.startsWith('/admin/users')) });
     items.push({ href: '/admin', label: 'Activity', on: on(p => p === '/admin' || p === '/admin/') });
   }

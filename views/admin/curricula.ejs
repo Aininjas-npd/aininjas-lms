@@ -1,0 +1,52 @@
+<%- include('../partials/header') %>
+<div class="row between wrap"><h1>Curricula</h1><a class="btn small" href="#new" onclick="document.getElementById('new').open=true">+ New curriculum</a></div>
+<p class="muted">A curriculum is the list of courses a grade is taught, in order. One curriculum can build on another — so "Grade 9, 2026 intake" can be everything Grade 8 gets plus one more, without keeping two lists in step by hand.</p>
+
+<% if (!rows.length) { %><p class="muted">None yet.</p><% } else { %>
+<table class="table"><thead><tr><th>Curriculum</th><th>Courses</th><th>Builds on</th><th>Suggested for</th><th>Order</th><th></th></tr></thead><tbody>
+<% rows.forEach(r => { %>
+  <tr>
+    <td><a href="/admin/curricula/<%= r.id %>"><strong><%= r.title %></strong></a>
+      <% if (!r.is_published) { %> <span class="badge">draft</span><% } %>
+      <br><span class="muted small"><%= r.school_slug || 'shared template' %></span></td>
+    <td><%= r.count %><% if (r.inheritedCount) { %> <span class="muted small">(<%= r.inheritedCount %> inherited)</span><% } %></td>
+    <td><% if (r.parent) { %><a href="/admin/curricula/<%= r.parent.id %>" class="small"><%= r.parent.title %></a><% } else { %><span class="muted small">—</span><% } %>
+      <% if (r.usedBy) { %><br><span class="muted small"><%= r.usedBy %> build<%= r.usedBy === 1 ? 's' : '' %> on this</span><% } %></td>
+    <td><% if (!r.grades.length) { %><span class="muted small">not assigned</span><% } %>
+      <% r.grades.forEach(g => { %><span class="badge"><%= g.grade %><%= g.academic_year ? ' · ' + g.academic_year : '' %></span> <% }) %></td>
+    <td><span class="badge <%= r.sequential ? 'active' : '' %>"><%= r.sequential ? 'locked' : 'open' %></span></td>
+    <td class="actions"><a class="btn small" href="/admin/curricula/<%= r.id %>">✎ Edit</a></td>
+  </tr>
+<% }) %>
+</tbody></table>
+<% } %>
+
+<details id="new" class="card" style="margin-top:18px"><summary style="cursor:pointer;font-weight:700">New curriculum</summary>
+  <form method="post" action="/admin/curricula">
+    <label>Name</label><input type="text" name="title" placeholder="e.g. Level 1 — Grade 8" required>
+    <label>Description <span class="muted">(optional)</span></label><textarea name="description" rows="2"></textarea>
+    <label>Builds on <span class="muted">(optional — inherits that curriculum's courses first)</span></label>
+    <select name="extends_id"><option value="">— nothing, start empty —</option>
+      <% all.forEach(a => { %><option value="<%= a.id %>"><%= a.title %></option><% }) %></select>
+    <label>School <span class="muted">(leave blank for a template every school can use)</span></label>
+    <select name="school_slug"><option value="">— shared template —</option>
+      <% schools.forEach(s => { %><option value="<%= s.slug %>"><%= s.slug %> (<%= s.n %>)</option><% }) %></select>
+    <label class="check"><input type="checkbox" name="sequential" checked> Lock the order — a course opens only when the one before it is complete</label>
+    <p><button class="btn">Create curriculum</button></p>
+  </form>
+</details>
+
+<div class="card" style="margin-top:18px">
+  <h3>Suggest a curriculum for a grade</h3>
+  <p class="muted small">Leave the year blank for the standing default. Name a year (e.g. <code>2026-27</code>) for a cohort that needs catching up — that entry wins for that year only, and the default applies again afterwards.</p>
+  <form method="post" action="/admin/curricula/grades" class="row gap wrap">
+    <select name="school_slug" required><option value="">School…</option>
+      <% schools.forEach(s => { %><option value="<%= s.slug %>"><%= s.slug %></option><% }) %></select>
+    <input type="text" name="grade" placeholder="Grade 8" required style="max-width:140px">
+    <input type="text" name="academic_year" placeholder="year (optional)" style="max-width:140px">
+    <select name="curriculum_id"><option value="">— clear the suggestion —</option>
+      <% all.forEach(a => { %><option value="<%= a.id %>"><%= a.title %></option><% }) %></select>
+    <button class="btn small">Save</button>
+  </form>
+</div>
+<%- include('../partials/footer') %>

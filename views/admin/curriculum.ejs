@@ -1,0 +1,109 @@
+<%- include('../partials/header') %>
+<a href="/admin/curricula" class="muted small">← Curricula</a>
+<div class="row between wrap"><h1><%= c.title %></h1>
+  <form method="post" action="/admin/curricula/<%= c.id %>/delete" onsubmit="return confirm('Delete this curriculum? Enrolments already made from it are left alone.')"><button class="btn small danger">Delete</button></form>
+</div>
+<% if (ancestry.length) { %>
+  <p class="muted">Builds on <% ancestry.forEach((a, i) => { %><%= i ? ' → ' : '' %><a href="/admin/curricula/<%= a.id %>"><%= a.title %></a><% }) %>. Courses from there are inherited and stay in step automatically.</p>
+<% } %>
+<% if (descendants.length) { %>
+  <p class="hint">Changing this list also changes <% descendants.forEach((d, i) => { %><%= i ? ', ' : '' %><a href="/admin/curricula/<%= d.id %>"><%= d.title %></a><% }) %>.</p>
+<% } %>
+
+<div class="fg2" style="align-items:start">
+<div class="card">
+  <h3>Courses, in teaching order</h3>
+  <% if (!items.length) { %><p class="muted">No courses yet. Add the first one on the right.</p><% } %>
+  <% if (items.filter(i => !i.inherited).length > 1) { %><p class="hint" style="margin-top:0">Drag your own courses by the ☰ handle to reorder. Inherited ones keep the order they have where they are defined.</p><% } %>
+  <ol class="path compact" id="courselist" data-reorder-url="/admin/curricula/<%= c.id %>/reorder">
+  <% items.forEach((i, n) => { %>
+    <li class="step <%= i.inherited ? 'sco' : 'quiz' %>" data-id="<%= i.courseId %>" <%- i.inherited ? '' : 'draggable="true"' %>>
+      <div class="num"><%= n + 1 %></div>
+      <% if (!i.inherited) { %><div class="handle" title="Drag to reorder">☰</div><% } %>
+      <div class="body">
+        <div class="kind"><%= i.inherited ? 'Inherited · ' + i.from.title : 'This curriculum' %></div>
+        <h3><%= i.course.title %></h3>
+        <p class="small muted meta">
+          <%= i.required ? 'Required' : 'Enrichment — never blocks what follows' %>
+          <% if (!i.course.is_published) { %> · <span class="badge">closed to new enrolment</span><% } %>
+        </p>
+      </div>
+      <% if (!i.inherited) { %>
+      <div class="act actions">
+        <form method="post" action="/admin/curricula/<%= c.id %>/courses/remove" class="inline" onsubmit="return confirm('Remove this course from the curriculum? Nobody is unenrolled.')">
+          <input type="hidden" name="course_id" value="<%= i.courseId %>"><button class="iconbtn" title="Remove">✕</button></form>
+      </div>
+      <% } %>
+    </li>
+  <% }) %>
+  </ol>
+</div>
+
+<div>
+  <form class="card" method="post" action="/admin/curricula/<%= c.id %>/courses">
+    <h3>Add a course</h3>
+    <% if (!addable.length) { %><p class="muted small">Every course is already in this curriculum.</p><% } else { %>
+    <select name="course_id" required><option value="">Choose a course…</option>
+      <% addable.forEach(a => { %><option value="<%= a.id %>"><%= a.title %></option><% }) %></select>
+    <label class="check"><input type="checkbox" name="required" checked> Required — the next course waits for it</label>
+    <p><button class="btn small">Add to the end</button></p>
+    <% } %>
+  </form>
+
+  <form class="card" method="post" action="/admin/curricula/<%= c.id %>">
+    <h3>Settings</h3>
+    <label>Name</label><input type="text" name="title" value="<%= c.title %>">
+    <label>Description</label><textarea name="description" rows="2"><%= c.description || '' %></textarea>
+    <label>Builds on</label>
+    <select name="extends_id"><option value="">— nothing —</option>
+      <% others.forEach(o => { %><option value="<%= o.id %>" <%= c.extends_id === o.id ? 'selected' : '' %>><%= o.title %></option><% }) %></select>
+    <label class="check"><input type="checkbox" name="sequential" <%= c.sequential ? 'checked' : '' %>> Lock the order — a course opens only when the one before it is complete</label>
+    <label class="check"><input type="checkbox" name="is_published" <%= c.is_published ? 'checked' : '' %>> Ready to use</label>
+    <p><button class="btn small">Save</button></p>
+  </form>
+
+  <% if (c.school_slug && classes.length) { %>
+  <form class="card" method="post" action="/admin/curricula/<%= c.id %>/apply/preview">
+    <h3>Apply to a class</h3>
+    <p class="muted small">You will see exactly who gets what before anything is saved.</p>
+    <input type="hidden" name="school_slug" value="<%= c.school_slug %>">
+    <label>Classes</label>
+    <% classes.forEach(n => { %><label class="check"><input type="checkbox" name="classes" value="<%= n %>"> <%= n %></label><% }) %>
+    <label>Start <span class="muted">(optional — blank means now)</span></label><input type="date" name="starts_on">
+    <label>End <span class="muted">(optional)</span></label><input type="date" name="ends_on">
+    <p><button class="btn small">Preview →</button></p>
+  </form>
+  <% } else if (!c.school_slug) { %>
+  <div class="card"><h3>Apply to a class</h3><p class="muted small">This is a shared template. Make a copy for a school — or set its school — to enrol classes from it.</p></div>
+  <% } %>
+</div>
+</div>
+
+<script>
+(function () {
+  var list = document.getElementById('courselist'); if (!list) return;
+  var dragging = null;
+  list.querySelectorAll('li[draggable="true"]').forEach(function (li) {
+    li.addEventListener('dragstart', function (e) { dragging = li; li.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+    li.addEventListener('dragend', function () { li.classList.remove('dragging'); dragging = null; });
+    li.addEventListener('dragover', function (e) {
+      if (!dragging || dragging === li || !li.getAttribute('draggable')) return;
+      e.preventDefault();
+      var r = li.getBoundingClientRect();
+      list.insertBefore(dragging, (e.clientY - r.top) < r.height / 2 ? li : li.nextSibling);
+    });
+    li.addEventListener('drop', function (e) { e.preventDefault(); save(); });
+  });
+  function save() {
+    // Only this curriculum's own courses are reorderable; inherited ones are not sent.
+    var own = Array.prototype.filter.call(list.querySelectorAll('li[data-id]'), function (li) { return li.getAttribute('draggable'); });
+    var order = own.map(function (li) { return +li.dataset.id; });
+    list.querySelectorAll('li').forEach(function (li, i) { var n = li.querySelector('.num'); if (n) n.textContent = i + 1; });
+    fetch(list.dataset.reorderUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: order }), credentials: 'same-origin' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); })
+      .catch(function () { alert('Could not save the order — reload and try again.'); });
+  }
+})();
+</script>
+<%- include('../partials/footer') %>

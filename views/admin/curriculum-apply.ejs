@@ -1,0 +1,68 @@
+<%- include('../partials/header') %>
+<a href="/admin/curricula/<%= c.id %>" class="muted small">← <%= c.title %></a>
+<h1>Before anything is saved</h1>
+<p class="muted">Applying <strong><%= c.title %></strong> to <strong><%= classes.join(', ') %></strong> at <%= school %>. Nothing has been written yet — untick anything that shouldn't go out, then confirm.</p>
+
+<% if (p.notOffered.length) { %>
+<div class="card" style="border-color:#C98B8B;background:#FBECEC">
+  <h3>Not offered to this school</h3>
+  <p class="small">These are in the curriculum but <%= school %> isn't on their list, so students would be enrolled in something they can't open. Add the school on the course, or untick them below.</p>
+  <ul class="small"><% p.notOffered.forEach(n => { %><li><%= n.title %></li><% }) %></ul>
+</div>
+<% } %>
+
+<div class="fg2" style="align-items:start">
+<div class="card">
+  <h3>What each course would do</h3>
+  <form method="post" action="/admin/curricula/<%= c.id %>/apply" id="applyform">
+    <input type="hidden" name="school_slug" value="<%= school %>">
+    <% classes.forEach(n => { %><input type="hidden" name="classes" value="<%= n %>"><% }) %>
+    <input type="hidden" name="starts_on" value="<%= startsOn %>">
+    <input type="hidden" name="ends_on" value="<%= endsOn %>">
+
+    <table class="table"><thead><tr><th>Include</th><th>Course</th><th>New</th><th>Already on it</th><th>Re-opened</th></tr></thead><tbody>
+    <% p.items.forEach(i => {
+         const row = p.perCourse.find(x => x.course && x.course.id === i.courseId);
+         const off = p.notOffered.some(n => n.courseId === i.courseId); %>
+      <tr>
+        <td><input type="checkbox" name="course_ids" value="<%= i.courseId %>" <%= off ? '' : 'checked' %>></td>
+        <td><%= i.course.title %>
+          <% if (i.inherited) { %><br><span class="muted small">inherited from <%= i.from.title %></span><% } %>
+          <% if (!i.required) { %><br><span class="muted small">enrichment</span><% } %>
+          <% if (off) { %><br><span class="badge">not offered here</span><% } %></td>
+        <td><%= row ? row.enrol : '—' %></td>
+        <td><%= row ? row.already : '—' %></td>
+        <td><%= row ? row.reactivate : '—' %></td>
+      </tr>
+    <% }) %>
+    </tbody></table>
+
+    <p class="small muted">
+      <%= p.students.length %> student<%= p.students.length === 1 ? '' : 's' %> in <%= classes.join(', ') %>.
+      <%= startsOn ? `Starts ${startsOn}.` : 'Starts immediately.' %>
+      <%= endsOn ? ` Ends ${endsOn}.` : '' %>
+    </p>
+    <p><button class="btn">Confirm and enrol</button>
+       <a class="btn ghost" href="/admin/curricula/<%= c.id %>">Cancel</a></p>
+  </form>
+</div>
+
+<div>
+  <div class="card">
+    <h3>Students</h3>
+    <% if (!p.students.length) { %><p class="muted small">No students in <%= classes.join(', ') %> yet.</p><% } %>
+    <ul class="small" style="padding-left:18px">
+    <% p.students.forEach(s => { const a = p.already.find(x => x.user.id === s.id); %>
+      <li><%= s.name %><% if (a) { %> <span class="muted">— already has <%= a.courses.join(', ') %></span><% } %></li>
+    <% }) %>
+    </ul>
+    <p class="hint">Students already on a course keep the progress they have; they are not enrolled twice.</p>
+  </div>
+  <% if (c.sequential) { %>
+  <div class="card"><h3>Order is locked</h3>
+    <p class="small serif">Students will see the whole list, but each course opens only when the required one before it is complete. Everyone starts at <strong><%= p.items.length ? p.items[0].course.title : '—' %></strong>.</p>
+  </div>
+  <% } %>
+</div>
+</div>
+<%- include('../partials/footer') %>
