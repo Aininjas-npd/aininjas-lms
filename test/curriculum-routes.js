@@ -100,8 +100,11 @@ const get = async url => {
 
   // --- grade suggestion ---
   await post('/admin/curricula/grades', { school_slug: 'darularqam', grade: 'Grade 9', academic_year: '2026-27', curriculum_id: g9[1] });
+  const gradeRow = sql.prepare('SELECT * FROM curriculum_grades WHERE school_slug=? AND grade=? AND academic_year=?')
+    .get('darularqam', 'Grade 9', '2026-27');
+  check('the grade suggestion is saved', gradeRow && gradeRow.curriculum_id === Number(g9[1]), JSON.stringify(gradeRow));
   page = await get('/admin/curricula');
-  check('the grade suggestion shows on the list', page.text.includes('Grade 9') && page.text.includes('2026-27'));
+  check('and shown as a badge on the list', /Grade 9<\/span>|Grade 9 · 2026-27/.test(page.text));
 
   // --- preview writes nothing ---
   const before = sql.prepare('SELECT COUNT(*) n FROM enrollments').get().n;
@@ -136,6 +139,52 @@ const get = async url => {
   prog = cur.progressFor(aisha, Number(g9[1]));
   check('finishing the first opens the second', prog.items[0].done && !prog.items[1].locked,
     prog.items.map(i => (i.done ? 'D' : i.locked ? 'L' : 'o')).join(''));
+
+  // --- the gate as a student actually experiences it ---
+  // Put the class on the curriculum for the current year, then sign in as a student.
+  await post('/admin/curricula/year', { academic_year: '2026-27' });
+  check('the academic year is saved',
+    (sql.prepare("SELECT value FROM settings WHERE key='academic_year'").get() || {}).value === '2026-27',
+    JSON.stringify(sql.prepare("SELECT value FROM settings WHERE key='academic_year'").get()));
+  sql.prepare('UPDATE users SET password_hash=? WHERE email=?')
+    .run(require('bcryptjs').hashSync('ninja12345', 10), 'bilal@das.edu');
+
+  const adminCookie = cookie;
+  cookie = '';
+  const slogin = await post('/login', { email: 'bilal@das.edu', password: 'ninja12345' });
+  check('a student signs in', slogin.status === 302 && /dashboard/.test(slogin.loc || ''), `${slogin.status} → ${slogin.loc}`);
+
+  const dash = await get('/dashboard');
+  check('the dashboard shows the curriculum ladder', dash.text.includes('Grade 9 — 2026 intake'), 'ladder missing');
+  check('it says what is next', /Next up/.test(dash.text));
+  check('and marks the later courses as shut', /Opens later/.test(dash.text));
+  check('the course cards agree with the ladder — no "Start course" on a locked one',
+    !/The Disciple[\s\S]{0,400}?Start course/.test(dash.text), 'a locked course still offers Start course');
+  check('a locked card says what to finish first', /opens later[\s\S]{0,200}?Finish "/i.test(dash.text));
+
+  // Python for AI is first in the order after the reorder above; The Disciple is later and shut.
+  const openFirst = await get(`/courses/${PY}`);
+  check('the first course opens', openFirst.status === 200, String(openFirst.status));
+  const shut = await get(`/courses/${DISC}`);
+  check('a later course is refused', shut.status === 403, String(shut.status));
+  check('and the refusal says what is owed first',
+    /Opens later|opens in order|finished/.test(shut.text), shut.text.slice(0, 200));
+
+  const shutStep = await get(`/courses/${DISC}/play/1`);
+  check('the lesson player is shut too, not just the course page', shutStep.status === 403 || shutStep.status === 404, String(shutStep.status));
+
+  // finishing the first opens the second
+  const bilal = sql.prepare('SELECT id FROM users WHERE email=?').get('bilal@das.edu').id;
+  sql.prepare('UPDATE enrollments SET completed_at=? WHERE user_id=? AND course_id=?').run('2026-09-21', bilal, PY);
+  check('finishing the first opens the second', (await get(`/courses/${FOUND}`)).status === 200);
+
+  // an unlocked curriculum gates nobody
+  cookie = adminCookie;
+  await post(`/admin/curricula/${g9[1]}`, { title: 'Grade 9 — 2026 intake', extends_id: g8[1] });   // sequential unchecked
+  cookie = '';
+  await post('/login', { email: 'bilal@das.edu', password: 'ninja12345' });
+  check('unlocking the order opens everything', (await get(`/courses/${DISC}`)).status === 200);
+  cookie = adminCookie;
 
   // --- a non-admin cannot reach any of it ---
   const anon = await fetch(base + '/admin/curricula', { redirect: 'manual' });

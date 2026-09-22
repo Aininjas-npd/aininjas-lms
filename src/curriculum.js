@@ -302,6 +302,39 @@ function progressFor(userId, curriculumId) {
   };
 }
 
+/**
+ * The academic year the school is currently in, as a school admin set it (Admin → Curricula).
+ * Blank — the default — means "no year", and every grade simply uses its standing curriculum.
+ * This is what makes a "Grade 9 · 2026-27" entry actually take effect for one year and then stop.
+ */
+const currentYear = () => {
+  try { const r = q.getSetting.get('academic_year'); return (r && r.value) || ''; }
+  catch { return ''; }
+};
+const setCurrentYear = y => q.setSetting.run('academic_year', String(y || '').trim());
+
+/**
+ * The curriculum a student is on: whatever their grade is suggested, for the current academic
+ * year. Their class name IS the grade — that is how the school writes it when importing them.
+ */
+function forStudent(user) {
+  if (!user || !user.school_slug || !user.class_name) return null;
+  const c = forGrade(user.school_slug, user.class_name, currentYear());
+  return c && c.is_published ? c : null;
+}
+
+/**
+ * Is this course locked for this student right now? Staff are never gated — a teacher opens
+ * anything their school is offered, which is how they prepare a lesson before the class reaches it.
+ */
+function lockedFor(user, courseId) {
+  if (!user || user.role !== 'learner') return null;
+  const c = forStudent(user);
+  if (!c || !c.sequential) return null;
+  const verdict = mayOpen(user.id, courseId, c.id);
+  return verdict.ok ? null : { curriculum: c, reason: verdict.reason };
+}
+
 /** May this student open this course, given the curriculum their class is on? */
 function mayOpen(userId, courseId, curriculumId) {
   const p = progressFor(userId, curriculumId);
@@ -344,5 +377,6 @@ module.exports = {
   addCourse, removeCourse, reorder, ownCourses,
   resolve, ancestry, descendants,
   forGrade, setForGrade, clearForGrade, gradesFor,
+  currentYear, setCurrentYear, forStudent, lockedFor,
   progressFor, mayOpen, applyPreview,
 };

@@ -1,5 +1,29 @@
 <%- include('partials/header') %>
 
+<% if (locals.ladder && ladder.items.length) { %>
+<div class="card" style="margin-bottom:16px">
+  <div class="row between wrap" style="align-items:baseline">
+    <h3 style="margin:0"><%= ladder.curriculum.title %></h3>
+    <span class="muted small"><%= ladder.done %> of <%= ladder.total %> courses complete · <%= ladder.percent %>%</span>
+  </div>
+  <% if (ladder.next) { %><p class="muted small" style="margin:6px 0 0">Next up: <strong><%= ladder.next.course.title %></strong></p><% } %>
+  <ol class="path compact" style="margin-top:12px">
+  <% ladder.items.forEach((i, n) => { %>
+    <li class="step <%= i.done ? 'sco' : i.locked ? 'note' : 'quiz' %>">
+      <div class="num"><%= i.done ? '✓' : n + 1 %></div>
+      <div class="body">
+        <div class="kind"><%= i.done ? 'Complete' : i.locked ? 'Opens later' : i.enrolled ? 'Open now' : 'Not enrolled yet' %><%= i.required ? '' : ' · optional' %></div>
+        <h3 style="<%= i.locked ? 'opacity:.6' : '' %>">
+          <% if (!i.locked && i.enrolled) { %><a href="/courses/<%= i.courseId %>"><%= i.course.title %></a><% } else { %><%= i.course.title %><% } %>
+        </h3>
+        <% if (i.locked) { %><p class="small muted meta">🔒 <%= i.blockedBy ? 'Opens once you have finished "' + i.blockedBy + '".' : 'Opens later.' %></p><% } %>
+      </div>
+    </li>
+  <% }) %>
+  </ol>
+</div>
+<% } %>
+
 <% (locals.updates || []).forEach(u => { %>
   <div class="card" style="border-left:4px solid var(--crimson,#b3232f)">
     <h3 style="margin:0 0 6px">An updated version of "<%= u.course.title %>" is ready</h3>
@@ -37,7 +61,13 @@
     <% if (e.status === 'active') { %>
       <div class="progress"><i style="width:<%= s.percent %>%"></i></div>
       <p class="small muted"><%= s.done %>/<%= s.total %> lessons · <%= s.percent %>% <% if (s.avgScore != null) { %>· avg score <%= s.avgScore %><% } %></p>
-      <a class="btn small" href="/courses/<%= e.course_id %>"><%= s.status === 'not_started' ? 'Start course' : s.status === 'completed' ? 'Review' : 'Continue' %></a>
+      <% const lockedBy = (locals.lockedCourses || {})[e.course_id]; %>
+      <% if (lockedBy !== undefined) { %>
+        <span class="badge">🔒 opens later</span>
+        <% if (lockedBy) { %><p class="small muted" style="margin:6px 0 0">Finish "<%= lockedBy %>" first.</p><% } %>
+      <% } else { %>
+        <a class="btn small" href="/courses/<%= e.course_id %>"><%= s.status === 'not_started' ? 'Start course' : s.status === 'completed' ? 'Review' : 'Continue' %></a>
+      <% } %>
     <% } else if (e.status === 'requested') { %><p class="small muted">Waiting for an admin to grant access.</p><% } %>
   </div>
 <% }) %>

@@ -36,7 +36,7 @@ router.get('/curricula', requireAdmin, (req, res) => {
       grades: db.prepare('SELECT school_slug, grade, academic_year FROM curriculum_grades WHERE curriculum_id=?').all(c.id),
     };
   });
-  res.render('admin/curricula', { title: 'Curricula', rows, all: cur.list(), schools: schoolsList() });
+  res.render('admin/curricula', { title: 'Curricula', rows, all: cur.list(), schools: schoolsList(), year: cur.currentYear() });
 });
 
 router.post('/curricula', requireAdmin, (req, res) => {
@@ -54,6 +54,35 @@ router.post('/curricula', requireAdmin, (req, res) => {
     flash(req, 'error', e.message);
     res.redirect('/admin/curricula');
   }
+});
+
+/* These two literal paths must be declared before any /curricula/:id route: Express matches in
+   order, so "/curricula/grades" would otherwise be read as a curriculum whose id is "grades". */
+/* ----------------------------------------------------------------- § grades -- */
+
+router.post('/curricula/grades', requireAdmin, (req, res) => {
+  const { school_slug: school, grade, academic_year: year, curriculum_id: cid } = req.body;
+  try {
+    if (!school || !grade) throw new Error('Pick a school and name the grade.');
+    if (cid) {
+      cur.setForGrade(school, String(grade).trim(), Number(cid), String(year || '').trim());
+      flash(req, 'success', `${grade}${year ? ` (${year})` : ''} now suggests "${cur.byId(cid).title}".`);
+    } else {
+      cur.clearForGrade(school, String(grade).trim(), String(year || '').trim());
+      flash(req, 'success', `Cleared the suggestion for ${grade}.`);
+    }
+  } catch (e) { flash(req, 'error', e.message); }
+  res.redirect(req.body.back || '/admin/curricula');
+});
+
+/* The year decides which per-year grade entries apply. Blank = every grade on its standing one. */
+router.post('/curricula/year', requireAdmin, (req, res) => {
+  cur.setCurrentYear(req.body.academic_year);
+  const y = cur.currentYear();
+  flash(req, 'success', y
+    ? `Academic year set to ${y}. Grade entries naming ${y} now apply; the rest stay on their standing curriculum.`
+    : 'Academic year cleared. Every grade is on its standing curriculum.');
+  res.redirect('/admin/curricula');
 });
 
 /* ------------------------------------------------------------------ § edit -- */
@@ -118,23 +147,6 @@ router.post('/curricula/:id/reorder', requireAdmin, express.json(), (req, res) =
 router.post('/curricula/:id/delete', requireAdmin, (req, res) => {
   try { cur.remove(req.params.id); flash(req, 'success', 'Curriculum deleted. No enrolments were changed.'); res.redirect('/admin/curricula'); }
   catch (e) { flash(req, 'error', e.message); res.redirect(`/admin/curricula/${req.params.id}`); }
-});
-
-/* ----------------------------------------------------------------- § grades -- */
-
-router.post('/curricula/grades', requireAdmin, (req, res) => {
-  const { school_slug: school, grade, academic_year: year, curriculum_id: cid } = req.body;
-  try {
-    if (!school || !grade) throw new Error('Pick a school and name the grade.');
-    if (cid) {
-      cur.setForGrade(school, String(grade).trim(), Number(cid), String(year || '').trim());
-      flash(req, 'success', `${grade}${year ? ` (${year})` : ''} now suggests "${cur.byId(cid).title}".`);
-    } else {
-      cur.clearForGrade(school, String(grade).trim(), String(year || '').trim());
-      flash(req, 'success', `Cleared the suggestion for ${grade}.`);
-    }
-  } catch (e) { flash(req, 'error', e.message); }
-  res.redirect(req.body.back || '/admin/curricula');
 });
 
 /* ------------------------------------------------------------------ § apply -- */

@@ -23,6 +23,21 @@ function mayOpenCourse(user, course, enrollment) {
   return !!enrollment && enrollment.status === 'active';
 }
 
+/* Enrolment says a learner MAY have this course; the curriculum says whether it is their turn yet.
+   With the order locked, a course waits for the required one before it. Staff are never gated —
+   a teacher opens anything their school is offered, so they can prepare ahead of the class.
+
+   Returns true when it has rendered a refusal, so callers can simply `if (lockedOut(...)) return;`. */
+function lockedOut(req, res, course) {
+  const lock = require('../curriculum').lockedFor(req.user, course.id);
+  if (!lock) return false;
+  res.status(403).render('error', {
+    title: 'Not open yet',
+    message: `"${course.title}" is part of ${lock.curriculum.title}, and it opens in order. ${lock.reason}`,
+  });
+  return true;
+}
+
 
 router.get('/', (req, res) => {
   if (req.user && req.user.status === 'approved') return res.redirect(homeFor(req.user));
@@ -78,7 +93,18 @@ router.get('/dashboard', requireLogin, (req, res) => {
     const s = pathLib.pathSummary(req.user.id, course.id, req.user);
     return { course, next, percent: s.percent, done: s.done, total: s.total };
   }).filter(Boolean);
-  res.render('dashboard', { title: 'My courses', mine, ended, catalog, due, updates, dueNow: require('../assign').nowLocal(), widgets: plugins.widgets('learnerDashboard', req.user) });
+  /* The ladder their grade is on, so the dashboard can show what is next and what is still shut. */
+  let ladder = null, lockedCourses = {};
+  try {
+    const curLib = require('../curriculum');
+    const c = curLib.forStudent(req.user);
+    if (c) {
+      ladder = curLib.progressFor(req.user.id, c.id);
+      // The cards below the ladder must agree with it: a locked course shows why, not "Start".
+      for (const i of ladder.items) if (i.locked) lockedCourses[i.courseId] = i.blockedBy || '';
+    }
+  } catch (e) { /* a dashboard is not worth failing over a curriculum */ }
+  res.render('dashboard', { title: 'My courses', mine, ended, catalog, due, updates, ladder, lockedCourses, dueNow: require('../assign').nowLocal(), widgets: plugins.widgets('learnerDashboard', req.user) });
 });
 
 // Move to the updated version of a course — the learner's own choice, never automatic.
@@ -123,6 +149,7 @@ router.get('/courses/:id', requireLogin, (req, res) => {
     if (enrollment && enrollment.status === 'ended') return res.status(403).render('error', { title: 'This course has ended', message: `Your access to "${course.title}" ended${enrollment.ends_on ? ' on ' + enrollment.ends_on : ''}. Your progress is saved — ask your teacher if you need it extended.` });
     return res.status(403).render('error', { title: 'No access', message: 'You are not enrolled in this course yet.' });
   }
+  if (lockedOut(req, res, course)) return;
   const lp = pathLib.pathSummary(req.user.id, course.id, req.user);
   const stepFiles = require('../stepfiles').forSteps(lp.steps.filter(s2 => s2.custom).map(s2 => s2.id));
   res.render('course', { title: course.title, course, lp, stepFiles, justDone: req.query.done || null, quizEnabled: pathLib.quizEnabled(),
@@ -135,6 +162,7 @@ function stepFor(req, res) {
   if (!course) { res.status(404).render('error', { title: 'Not found', message: 'Course not found.' }); return null; }
   const enrollment = q.enrollment.get(req.user.id, course.id);
   if (!mayOpenCourse(req.user, course, enrollment)) { res.status(403).render('error', { title: enrollment && enrollment.status === 'ended' ? 'This course has ended' : 'No access', message: enrollment && enrollment.status === 'ended' ? 'Your access to this course has ended. Your progress is saved.' : 'You are not enrolled in this course.' }); return null; }
+  if (lockedOut(req, res, course)) return null;
   const step = pathLib.pathSummary(req.user.id, course.id).steps.find(s => String(s.id) === String(req.params.stepId));
   if (!step) { res.status(404).render('error', { title: 'Not found', message: 'That step no longer exists.' }); return null; }
   /* Teacher material and in-class quizzes are not the learner's to open — an assignment is how a
@@ -223,6 +251,7 @@ router.get('/courses/:id/play/:scoId', requireLogin, (req, res) => {
   if (!mayOpenCourse(req.user, course, enrollment)) {
     return res.status(403).render('error', { title: 'No access', message: 'You are not enrolled in this course.' });
   }
+  if (lockedOut(req, res, course)) return;
   /* A lesson that belongs to a teacher-only step is not servable to a learner either. */
   if (!pathLib.isStaff(req.user)) {
     const own = pathLib.stepsFor(course.id).find(s2 => s2.type === 'sco' && String(s2.config.sco_id) === String(sco.id));

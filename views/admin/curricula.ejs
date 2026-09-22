@@ -37,6 +37,15 @@
 </details>
 
 <div class="card" style="margin-top:18px">
+  <h3>Academic year</h3>
+  <p class="muted small">Currently <strong><%= year || 'not set' %></strong>. A grade entry that names this year wins over the grade's standing curriculum — that is how a catch-up cohort gets its own list for one year and then stops.</p>
+  <form method="post" action="/admin/curricula/year" class="row gap">
+    <input type="text" name="academic_year" value="<%= year %>" placeholder="2026-27" style="max-width:160px">
+    <button class="btn small">Save</button>
+  </form>
+</div>
+
+<div class="card" style="margin-top:18px">
   <h3>Suggest a curriculum for a grade</h3>
   <p class="muted small">Leave the year blank for the standing default. Name a year (e.g. <code>2026-27</code>) for a cohort that needs catching up — that entry wins for that year only, and the default applies again afterwards.</p>
   <form method="post" action="/admin/curricula/grades" class="row gap wrap">
