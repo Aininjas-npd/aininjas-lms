@@ -17,7 +17,8 @@
  *   Drive     a share link points at a viewer page, and even the download endpoint answers a
  *             large file with an HTML virus-scan interstitial instead of the bytes
  *   Dropbox   a share link renders a preview page unless you ask for dl=1
- *   OneDrive  likewise, with download=1
+ *   OneDrive  the worst of them: no single rewrite covers personal, Business and SharePoint
+ *             links, so several shapes are tried in turn (see oneDriveCandidates)
  *   S3/R2     a presigned URL is already the bytes, and must be passed through untouched — its
  *             signature covers the query string, so rewriting it breaks it
  *
@@ -56,8 +57,36 @@ const driveId = u => {
 };
 
 /**
+ * OneDrive's share links are the least cooperative of the lot, and there is no single rewrite that
+ * covers them, so we return an ordered list of things to try:
+ *
+ *   ?download=1        what SharePoint and OneDrive for Business answer a share link with
+ *   u! content         the consumer trick: base64url the whole share link, ask the content
+ *                      endpoint for it (see Microsoft's sharing-URL encoding — note the Graph
+ *                      version of this needs a signed-in user, so it only helps personal links)
+ *
+ * download() walks the list until one of them actually yields a zip.
+ */
+function oneDriveCandidates(u) {
+  const out = [];
+  const withDownload = new URL(u.toString());
+  withDownload.searchParams.set('download', '1');
+  out.push(withDownload.toString());
+
+  const share = 'u!' + Buffer.from(u.toString(), 'utf8').toString('base64')
+    .replace(/=+$/, '').replace(/\//g, '_').replace(/\+/g, '-');
+  out.push(`https://api.onedrive.com/v1.0/shares/${share}/root/content`);
+
+  if (!/[?&]download=1/.test(u.toString())) out.push(u.toString());   // last resort: as pasted
+  return out;
+}
+
+/**
  * Turn a share link into a link to the actual bytes. Anything unrecognised is returned untouched,
  * which is the right answer for presigned URLs, plain web servers and the LMS's own links.
+ *
+ * Returns { url, source, candidates } — `url` is the first thing to try and `candidates` the whole
+ * ordered list, which for most hosts is just that one URL.
  */
 function directUrl(raw) {
   let u;
@@ -74,20 +103,21 @@ function directUrl(raw) {
     d.searchParams.set('id', id);
     d.searchParams.set('export', 'download');
     d.searchParams.set('confirm', 't');
-    return { url: d.toString(), source: 'Google Drive' };
+    return { url: d.toString(), candidates: [d.toString()], source: 'Google Drive' };
   }
 
   // Dropbox → raw bytes rather than the preview page
   if (host.endsWith('dropbox.com')) {
     u.searchParams.delete('dl'); u.searchParams.set('dl', '1');
     u.searchParams.delete('raw');
-    return { url: u.toString(), source: 'Dropbox' };
+    return { url: u.toString(), candidates: [u.toString()], source: 'Dropbox' };
   }
 
-  // OneDrive / SharePoint share links
-  if (host.endsWith('1drv.ms') || host.endsWith('onedrive.live.com') || host.endsWith('sharepoint.com')) {
-    u.searchParams.set('download', '1');
-    return { url: u.toString(), source: 'OneDrive' };
+  // OneDrive / SharePoint share links — several shapes, tried in turn (see oneDriveCandidates)
+  if (host.endsWith('1drv.ms') || host.endsWith('onedrive.live.com')
+      || host.endsWith('sharepoint.com') || host.endsWith('api.onedrive.com')) {
+    const candidates = oneDriveCandidates(u);
+    return { url: candidates[0], candidates, source: host.endsWith('sharepoint.com') ? 'SharePoint' : 'OneDrive' };
   }
 
   // Everything else — presigned S3/R2/GCS, a plain web server, a CDN — is already the bytes.
@@ -96,7 +126,7 @@ function directUrl(raw) {
     : /(^|\.)s3[.-]|amazonaws\.com$/.test(host) ? 'Amazon S3'
       : /storage\.googleapis\.com$/.test(host) ? 'Google Cloud Storage'
         : host;
-  return { url: u.toString(), source };
+  return { url: u.toString(), candidates: [u.toString()], source };
 }
 
 /* ----------------------------------------------------------------- § sniff -- */
@@ -188,18 +218,11 @@ function httpError(res, source) {
 }
 
 /**
- * Download `rawUrl` to a temp file on the data volume.
- *
- * onProgress({ received, total, pct, rate, etaSec }) is called every ~500 ms so the admin page can
- * say something truthful while a couple of gigabytes move.
- *
- * Returns { file, name, bytes, source } — `file` being a temp path the caller must delete, exactly
- * as it deletes multer's temp file today.
+ * Open one candidate URL and confirm it is really a zip, following a download-button interstitial
+ * once if what came back was a web page. Returns the live stream positioned at the start, or
+ * throws with a message worth showing.
  */
-async function download(rawUrl, { onProgress, maxBytes, freeBytes } = {}) {
-  const { url, source } = directUrl(rawUrl);
-  fs.mkdirSync(TMP_DIR, { recursive: true });
-
+async function openZipStream(url, source) {
   let res = await openStream(url);
   if (!res.ok) throw httpError(res, source);
 
@@ -257,6 +280,38 @@ async function download(rawUrl, { onProgress, maxBytes, freeBytes } = {}) {
       throw new Error('that link returned a web page, not a package, even after following its download button. Download it yourself and put it somewhere that serves the file directly.');
     }
   }
+
+  return { res, iter, chunks, url };
+}
+
+/**
+ * Download `rawUrl` to a temp file on the data volume.
+ *
+ * onProgress({ source, received, total, pct, rate, etaSec }) is called every ~500 ms so the admin
+ * page can say something truthful while a couple of gigabytes move.
+ *
+ * `resolve` maps the pasted link to { candidates, source } and defaults to directUrl; it is a seam
+ * so the candidate walk can be tested against a local server.
+ *
+ * Returns { file, name, bytes, source } — `file` being a temp path the caller must delete, exactly
+ * as it deletes multer's temp file today.
+ */
+async function download(rawUrl, { onProgress, maxBytes, freeBytes, resolve = directUrl } = {}) {
+  const { candidates, source } = resolve(rawUrl);
+  fs.mkdirSync(TMP_DIR, { recursive: true });
+
+  /* Most hosts give one candidate. OneDrive gives several, because no single rewrite covers
+     personal, Business and SharePoint links — so try them in turn and report the first host's
+     complaint if none of them works, that being the one the admin can act on. */
+  let opened = null, firstErr = null;
+  for (const candidate of candidates) {
+    try { opened = await openZipStream(candidate, source); break; }
+    catch (e) { if (!firstErr) firstErr = e; }
+  }
+  if (!opened) throw firstErr;
+
+  const { res, chunks, url } = opened;
+  let iter = opened.iter;
 
   const total = Number(res.headers.get('content-length')) || 0;
   const name = nameFrom(res, url);

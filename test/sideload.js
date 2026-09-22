@@ -67,6 +67,17 @@ const server = http.createServer((req, res) => {
     return res.end('<!DOCTYPE html><html><body>Sign in to continue to accounts.google.com</body></html>');
   }
 
+  // Imitates OneDrive: the ?download=1 shape 404s, the u! content shape serves the file.
+  if (p === '/od') {
+    if (u.searchParams.get('download') === '1') { res.writeHead(404); return res.end('nope'); }
+    res.writeHead(200, { 'content-type': 'text/html' });
+    return res.end('<html><body>preview</body></html>');
+  }
+  if (p.startsWith('/v1.0/shares/')) {
+    res.writeHead(200, { 'content-type': 'application/zip', 'content-length': SMALL.length });
+    return res.end(SMALL);
+  }
+
   if (p === '/403') { res.writeHead(403); return res.end('no'); }
   if (p === '/404') { res.writeHead(404); return res.end('no'); }
 
@@ -115,6 +126,19 @@ async function expectFail(name, url, re) {
   try { directUrl('https://drive.google.com/drive/my-drive'); check('Drive folder link rejected', false); }
   catch (e) { check('Drive folder link rejected', /no file id/.test(e.message), e.message); }
 
+  // --- OneDrive: several shapes, tried in turn ---
+  const od = directUrl('https://1drv.ms/u/s!AkfaA123abc');
+  check('OneDrive link yields several candidates', od.candidates.length >= 2, `${od.candidates.length}`);
+  check('first OneDrive candidate asks for the download', /download=1/.test(od.candidates[0]), od.candidates[0]);
+  check('second is the base64url share-content endpoint', /api\.onedrive\.com\/v1\.0\/shares\/u!/.test(od.candidates[1]), od.candidates[1]);
+  check('the share id is unpadded base64url', !/[=+/]/.test(od.candidates[1].split('/shares/')[1].split('/')[0].slice(2)), od.candidates[1]);
+  const sp = directUrl('https://aininjas-my.sharepoint.com/:u:/g/personal/m/AbC?e=xyz');
+  check('a SharePoint link is named SharePoint', sp.source === 'SharePoint', sp.source);
+  check('SharePoint keeps its own query intact', /e=xyz/.test(sp.candidates[0]), sp.candidates[0]);
+  check('Drive and S3 still yield exactly one candidate',
+    directUrl('https://drive.google.com/file/d/1AbC_dEfGhIjKlMnOpQ/view').candidates.length === 1
+    && directUrl(presigned).candidates.length === 1);
+
   // --- happy path ---
   const r1 = await download(`${base}/small.zip`);
   check('downloads a zip', fs.readFileSync(r1.file).equals(SMALL) && r1.bytes === SMALL.length, `${r1.bytes} bytes`);
@@ -157,6 +181,25 @@ async function expectFail(name, url, re) {
   check('the file really is 600 MB on disk', fs.statSync(r3.file).size === BIG_BYTES, human(fs.statSync(r3.file).size));
   check('progress was reported', lastPct === 100, `last pct ${lastPct}`);
   fs.rmSync(r3.file, { force: true });
+
+  // --- walking candidates: the first shape fails, a later one works (as OneDrive behaves) ---
+  {
+    const r = await download('onedrive-ish', {
+      resolve: () => ({ source: 'OneDrive', candidates: [`${base}/od?download=1`, `${base}/od`, `${base}/v1.0/shares/u!abc/root/content`] }),
+    });
+    check('it falls through to a later candidate and downloads', fs.readFileSync(r.file).equals(SMALL), `${r.bytes} bytes`);
+    fs.rmSync(r.file, { force: true });
+
+    // when every candidate fails, the FIRST host's complaint is what the admin sees
+    const e = await download('onedrive-ish', {
+      resolve: () => ({ source: 'OneDrive', candidates: [`${base}/403`, `${base}/404`] }),
+    }).catch(x => x);
+    check('all-candidates-fail reports the first failure', /refused the download \(HTTP 403\)/.test(e.message), e.message);
+
+    // a preview page with no download button is still refused
+    const p2 = await download(`${base}/od`).catch(x => x);
+    check('a preview page with no download button is refused', /web page/.test(p2.message), p2.message);
+  }
 
   // --- cleanup: no temp files left behind by the failures above ---
   const leftovers = fs.readdirSync(path.join(process.env.DATA_DIR, 'uploads')).filter(f => f.startsWith('url-'));
