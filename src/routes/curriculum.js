@@ -34,6 +34,7 @@ router.get('/curricula', requireAdmin, (req, res) => {
       parent: c.extends_id ? cur.byId(c.extends_id) : null,
       usedBy: cur.descendants(c.id).length,
       grades: db.prepare('SELECT school_slug, grade, academic_year FROM curriculum_grades WHERE curriculum_id=?').all(c.id),
+      offeredTo: cur.schoolsFor(c.id),
     };
   });
   /* The grade must match a student's class name exactly, so offer the real ones rather than a
@@ -106,6 +107,7 @@ router.get('/curricula/:id', requireAdmin, (req, res) => {
     others: cur.list().filter(x => x.id !== c.id && !cur.descendants(c.id).some(d => d.id === x.id)),
     addable: q.courses.all().filter(x => !inThis.has(x.id)),
     schools: schoolsList(),
+    curriculumSchools: cur.schoolsFor(c.id),
     /* Every school's class list, so "Apply to a class" works even for a shared template: pick the
        school, and its classes appear. Without this a template was a dead end — it offered no
        classes and the settings form had no way to give it a school either. */
@@ -126,6 +128,19 @@ router.post('/curricula/:id', requireAdmin, (req, res) => {
     flash(req, 'success', 'Saved.');
   } catch (e) { flash(req, 'error', e.message); }
   res.redirect(`/admin/curricula/${req.params.id}`);
+});
+
+/** Which schools may use it — the same shape of control a course has. */
+router.post('/curricula/:id/schools', requireAdmin, (req, res) => {
+  const c = cur.byId(req.params.id);
+  if (!c) return res.status(404).render('error', { title: 'Not found', message: 'Curriculum not found.' });
+  const known = new Set(schoolsList().map(s => s.slug));
+  const chosen = (Array.isArray(req.body.schools) ? req.body.schools : [req.body.schools]).filter(s => known.has(s));
+  cur.setSchoolsFor(c.id, req.body.everyone === 'on' ? [] : chosen);
+  flash(req, 'success', req.body.everyone === 'on' || !chosen.length
+    ? `"${c.title}" is available to every school.`
+    : `"${c.title}" is limited to ${chosen.length} school${chosen.length === 1 ? '' : 's'}. Classes already enrolled keep their courses.`);
+  res.redirect(`/admin/curricula/${c.id}`);
 });
 
 router.post('/curricula/:id/courses', requireAdmin, (req, res) => {

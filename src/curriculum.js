@@ -61,6 +61,12 @@ CREATE TABLE IF NOT EXISTS curriculum_grades (
   curriculum_id INTEGER NOT NULL REFERENCES curricula(id) ON DELETE CASCADE,
   PRIMARY KEY (school_slug, grade, academic_year)
 );
+-- Which schools may use a curriculum. NO rows at all = every school, exactly as courses behave.
+CREATE TABLE IF NOT EXISTS curriculum_schools (
+  curriculum_id INTEGER NOT NULL REFERENCES curricula(id) ON DELETE CASCADE,
+  school_slug   TEXT NOT NULL,
+  PRIMARY KEY (curriculum_id, school_slug)
+);
 CREATE INDEX IF NOT EXISTS idx_curriculum_courses_c ON curriculum_courses(curriculum_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_curricula_extends ON curricula(extends_id);
 `);
@@ -72,12 +78,43 @@ const slugify = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').r
 const byId = id => db.prepare('SELECT * FROM curricula WHERE id=?').get(id) || null;
 const bySlug = slug => db.prepare('SELECT * FROM curricula WHERE slug=?').get(slug) || null;
 
-/** Every curriculum, optionally only those a school may use (its own, plus the shared templates). */
-function list(schoolSlug) {
-  return schoolSlug
-    ? db.prepare('SELECT * FROM curricula WHERE school_slug IS NULL OR school_slug=? ORDER BY title COLLATE NOCASE').all(schoolSlug)
-    : db.prepare('SELECT * FROM curricula ORDER BY title COLLATE NOCASE').all();
+/* ---------------------------------------------------------- § availability -- */
+/*
+ * Who may use a curriculum, on the same footing as a course.
+ *
+ * A curriculum belongs to one school (school_slug) or to nobody, in which case it is a template.
+ * A template is not automatically everybody's: `curriculum_schools` narrows it, and no rows at all
+ * means every school — the way course_schools already works, so nothing that exists today changes
+ * meaning when this ships.
+ */
+const schoolsFor = curriculumId => db.prepare(
+  'SELECT school_slug FROM curriculum_schools WHERE curriculum_id=? ORDER BY school_slug').all(curriculumId).map(r => r.school_slug);
+
+function setSchoolsFor(curriculumId, slugs) {
+  db.transaction(() => {
+    db.prepare('DELETE FROM curriculum_schools WHERE curriculum_id=?').run(curriculumId);
+    const ins = db.prepare('INSERT OR IGNORE INTO curriculum_schools (curriculum_id, school_slug) VALUES (?, ?)');
+    for (const s of slugs) if (s) ins.run(curriculumId, s);
+  })();
 }
+
+/** May this school use it? Its own always; a template only if unrestricted or named. */
+function openTo(curriculumId, schoolSlug) {
+  const c = byId(curriculumId);
+  if (!c) return false;
+  if (c.school_slug) return !!schoolSlug && c.school_slug === schoolSlug;
+  const rows = schoolsFor(curriculumId);
+  return rows.length === 0 || (!!schoolSlug && rows.includes(schoolSlug));
+}
+
+/** Every curriculum, or only the ones a school may actually use. */
+function list(schoolSlug) {
+  const all = db.prepare('SELECT * FROM curricula ORDER BY title COLLATE NOCASE').all();
+  return schoolSlug ? all.filter(c => openTo(c.id, schoolSlug)) : all;
+}
+
+/** What a teacher or school admin may enrol from: published, and offered to their school. */
+const forSchool = schoolSlug => list(schoolSlug).filter(c => c.is_published);
 
 function create({ title, description, extendsId, schoolSlug, sequential = 1 }) {
   const t = String(title || '').trim();
@@ -321,7 +358,9 @@ const setCurrentYear = y => q.setSetting.run('academic_year', String(y || '').tr
 function forStudent(user) {
   if (!user || !user.school_slug || !user.class_name) return null;
   const c = forGrade(user.school_slug, user.class_name, currentYear());
-  return c && c.is_published ? c : null;
+  /* A curriculum withdrawn from a school stops laddering its students at once, rather than
+     leaving them locked behind a list the school is no longer offered. */
+  return c && c.is_published && openTo(c.id, user.school_slug) ? c : null;
 }
 
 /**
@@ -374,7 +413,8 @@ function applyPreview({ curriculumId, schoolSlug, classes, excludeUserIds = [] }
 }
 
 module.exports = {
-  byId, bySlug, list, create, update, remove,
+  byId, bySlug, list, forSchool, create, update, remove,
+  schoolsFor, setSchoolsFor, openTo,
   addCourse, removeCourse, reorder, ownCourses,
   resolve, ancestry, descendants,
   forGrade, setForGrade, clearForGrade, gradesFor,

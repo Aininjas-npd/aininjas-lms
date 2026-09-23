@@ -65,6 +65,20 @@
     <p><button class="btn small">Save</button></p>
   </form>
 
+  <form class="card" method="post" action="/admin/curricula/<%= c.id %>/schools">
+    <h3>Available to</h3>
+    <p class="muted small">Which schools may see this curriculum and enrol their classes from it. A curriculum that belongs to a school is only ever that school's; a shared template with nothing ticked is offered to every school, exactly as a course is.</p>
+    <% if (c.school_slug) { %>
+      <p class="serif">Owned by <strong><%= c.school_slug %></strong>. No other school can see it. Make it a shared template under Settings if you want to offer it more widely.</p>
+    <% } else { %>
+      <div class="row gap wrap">
+        <label class="check"><input type="checkbox" name="everyone" <%= curriculumSchools.length ? '' : 'checked' %> onchange="document.querySelectorAll('.cus').forEach(x => x.disabled = this.checked)"> Every school</label>
+        <% schools.forEach(sc => { %><label class="check"><input type="checkbox" class="cus" name="schools" value="<%= sc.slug %>" <%= curriculumSchools.includes(sc.slug) ? 'checked' : '' %> <%= curriculumSchools.length ? '' : 'disabled' %>> <%= sc.slug %></label><% }) %>
+      </div>
+      <p><button class="btn small">Save</button></p>
+    <% } %>
+  </form>
+
   <form class="card" method="post" action="/admin/curricula/<%= c.id %>/apply/preview">
     <h3>Apply to a class</h3>
     <% const anyClasses = Object.values(classesBySchool).some(l => l.length); %>

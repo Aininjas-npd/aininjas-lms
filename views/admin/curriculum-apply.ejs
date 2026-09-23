@@ -1,5 +1,5 @@
 <%- include('../partials/header') %>
-<a href="/admin/curricula/<%= c.id %>" class="muted small">← <%= c.title %></a>
+<a href="<%= locals.backHref || ('/admin/curricula/' + c.id) %>" class="muted small"><%= locals.backLabel || ('← ' + c.title) %></a>
 <h1>Before anything is saved</h1>
 <p class="muted">Applying <strong><%= c.title %></strong> to <strong><%= classes.join(', ') %></strong> at <%= school %>. Nothing has been written yet — untick anything that shouldn't go out, then confirm.</p>
 
@@ -14,8 +14,9 @@
 <div class="fg2" style="align-items:start">
 <div class="card">
   <h3>What each course would do</h3>
-  <form method="post" action="/admin/curricula/<%= c.id %>/apply" id="applyform">
+  <form method="post" action="<%= locals.actionUrl || ('/admin/curricula/' + c.id + '/apply') %>" id="applyform">
     <input type="hidden" name="school_slug" value="<%= school %>">
+    <input type="hidden" name="curriculum_id" value="<%= c.id %>">
     <% classes.forEach(n => { %><input type="hidden" name="classes" value="<%= n %>"><% }) %>
     <input type="hidden" name="starts_on" value="<%= startsOn %>">
     <input type="hidden" name="ends_on" value="<%= endsOn %>">
@@ -43,7 +44,7 @@
       <%= endsOn ? ` Ends ${endsOn}.` : '' %>
     </p>
     <p><button class="btn">Confirm and enrol</button>
-       <a class="btn ghost" href="/admin/curricula/<%= c.id %>">Cancel</a></p>
+       <a class="btn ghost" href="<%= locals.cancelUrl || ('/admin/curricula/' + c.id) %>">Cancel</a></p>
   </form>
 </div>
 

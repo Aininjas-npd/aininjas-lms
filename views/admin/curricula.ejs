@@ -8,7 +8,7 @@
   <tr>
     <td><a href="/admin/curricula/<%= r.id %>"><strong><%= r.title %></strong></a>
       <% if (!r.is_published) { %> <span class="badge">draft</span><% } %>
-      <br><span class="muted small"><%= r.school_slug || 'shared template' %></span></td>
+      <br><span class="muted small"><%= r.school_slug ? r.school_slug + ' only' : (r.offeredTo.length ? 'template · ' + r.offeredTo.join(', ') : 'template · every school') %></span></td>
     <td><%= r.count %><% if (r.inheritedCount) { %> <span class="muted small">(<%= r.inheritedCount %> inherited)</span><% } %></td>
     <td><% if (r.parent) { %><a href="/admin/curricula/<%= r.parent.id %>" class="small"><%= r.parent.title %></a><% } else { %><span class="muted small">—</span><% } %>
       <% if (r.usedBy) { %><br><span class="muted small"><%= r.usedBy %> build<%= r.usedBy === 1 ? 's' : '' %> on this</span><% } %></td>

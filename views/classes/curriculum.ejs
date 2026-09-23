@@ -1,0 +1,98 @@
+<%- include('../partials/header') %>
+<a href="/classes/<%= encodeURIComponent(name) %>" class="muted small">← <%= name %></a>
+<div class="row between wrap"><h1>Curriculum · <%= name %></h1>
+  <% if (chosen) { %><a class="btn small ghost" href="/classes/<%= encodeURIComponent(name) %>/teach">▶ Teach this class</a><% } %></div>
+
+<% if (withdrawn) { %>
+  <div class="flash error">“<%= suggestedTitle %>” is set for this grade but is no longer offered to your school. Ask AI Ninjas to put it back, or enrol from one of the curricula below.</div>
+<% } %>
+
+<% if (!offered.length) { %>
+  <div class="card"><h3>Nothing to choose from yet</h3>
+    <p class="serif">No curriculum has been made available to your school. AI Ninjas sets these up — ask them, and it appears here.</p></div>
+<% } else { %>
+
+<div class="card">
+  <h3>What this grade is on</h3>
+  <% if (suggested) { %>
+    <p class="serif"><strong><%= suggested.title %></strong> is suggested for <%= name %><%= year ? ` in ${year}` : '' %>.
+      <% if (suggested.description) { %><br><span class="muted small"><%= suggested.description %></span><% } %></p>
+  <% } else { %>
+    <p class="muted serif">No curriculum is suggested for <%= name %><%= year ? ` in ${year}` : '' %>. You can still enrol the class from any of the ones below.</p>
+  <% } %>
+
+  <% if (canMap) { %>
+    <form method="post" action="/classes/<%= encodeURIComponent(name) %>/curriculum/suggest" class="row gap wrap" style="margin-top:10px">
+      <select name="curriculum_id">
+        <option value="">— no suggestion —</option>
+        <% offered.forEach(o => { %><option value="<%= o.id %>" <%= suggested && suggested.id === o.id ? 'selected' : '' %>><%= o.title %></option><% }) %>
+      </select>
+      <button class="btn small">Set for this grade</button>
+      <span class="muted small" style="align-self:center">Applies to <%= name %> across the school<%= year ? `, for ${year}` : '' %>.</span>
+    </form>
+  <% } %>
+</div>
+
+<div class="card">
+  <h3>Curricula your school may use</h3>
+  <div class="row gap wrap">
+  <% offered.forEach(o => { %>
+    <a class="btn small <%= chosen && chosen.id === o.id ? '' : 'ghost' %>" href="/classes/<%= encodeURIComponent(name) %>/curriculum?c=<%= o.id %>"><%= o.title %><% if (suggested && suggested.id === o.id) { %> ★<% } %></a>
+  <% }) %>
+  </div>
+  <p class="hint">★ is the one suggested for this grade.</p>
+</div>
+
+<% if (chosen && p) { %>
+<div class="fg2" style="align-items:start">
+  <div class="card">
+    <h3><%= chosen.title %></h3>
+    <p class="muted small"><%= p.items.length %> course<%= p.items.length === 1 ? '' : 's' %>, in order<%= chosen.sequential ? ' — each one opens when the required course before it is complete' : '' %>.</p>
+    <table class="table"><thead><tr><th>#</th><th>Course</th><th class="num">Already on it</th><th class="num">Would be enrolled</th></tr></thead><tbody>
+    <% p.items.forEach((i, n) => {
+         const row = p.perCourse.find(x => x.course && x.course.id === i.courseId);
+         const off = p.notOffered.some(x => x.courseId === i.courseId); %>
+      <tr>
+        <td class="muted"><%= n + 1 %></td>
+        <td><strong><%= i.course.title %></strong>
+          <% if (i.inherited) { %><br><span class="muted small">inherited from <%= i.from.title %></span><% } %>
+          <% if (!i.required) { %><br><span class="muted small">enrichment — never blocks what follows</span><% } %>
+          <% if (off) { %><br><span class="badge">not offered to your school</span><% } %></td>
+        <td class="num"><%= row ? row.already : '—' %></td>
+        <td class="num"><%= row ? row.enrol : '—' %></td>
+      </tr>
+    <% }) %>
+    </tbody></table>
+    <% if (p.notOffered.length) { %>
+      <p class="hint">A course marked <i>not offered</i> would leave students with something they cannot open. Untick it on the next screen, or ask AI Ninjas to add your school to it.</p>
+    <% } %>
+  </div>
+
+  <div>
+    <div class="card">
+      <h3>Enrol <%= name %></h3>
+      <p class="muted small"><%= p.students.length %> student<%= p.students.length === 1 ? '' : 's' %> in this class. You see exactly what will happen before anything is saved.</p>
+      <form method="post" action="/classes/<%= encodeURIComponent(name) %>/curriculum/preview">
+        <input type="hidden" name="curriculum_id" value="<%= chosen.id %>">
+        <label>Starts on <span class="muted">(leave empty for today)</span></label>
+        <input type="date" name="starts_on">
+        <label>Ends on <span class="muted">(optional)</span></label>
+        <input type="date" name="ends_on">
+        <p><button class="btn">Preview who gets enrolled</button></p>
+      </form>
+      <p class="hint">Students who already have a course keep their progress — nobody is enrolled twice.</p>
+    </div>
+    <% if (p.already.length) { %>
+    <div class="card">
+      <h3>Already part-way</h3>
+      <ul class="small" style="padding-left:18px">
+        <% p.already.slice(0, 12).forEach(a => { %><li><%= a.user.name %> <span class="muted">— <%= a.courses.join(', ') %></span></li><% }) %>
+      </ul>
+      <% if (p.already.length > 12) { %><p class="muted small">…and <%= p.already.length - 12 %> more.</p><% } %>
+    </div>
+    <% } %>
+  </div>
+</div>
+<% } %>
+<% } %>
+<%- include('../partials/footer') %>
