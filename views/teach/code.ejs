@@ -31,7 +31,7 @@
 <body class="proj">
 <div class="proj-bar">
   <div class="row gap" style="align-items:center">
-    <a class="btn small ghost" href="/classes/<%= encodeURIComponent(name) %>/teach/<%= course.id %>">✕ Exit</a>
+    <a class="btn small ghost" href="/classes/<%= encodeURIComponent(name) %>/teach/<%= course.id %>" title="Back to <%= course.title %> for <%= name %>">← Lesson plan</a>
     <span class="t"><%= step.title %></span>
     <span class="muted">· <%= course.title %> · <%= name %></span>
   </div>

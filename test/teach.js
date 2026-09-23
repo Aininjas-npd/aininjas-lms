@@ -37,7 +37,10 @@ const get = async url => {
       ADMIN_EMAIL: 'admin@test.local', ADMIN_PASSWORD: 'admin12345',
       /* Quiz Studio configured, so the live hand-off is exercised for real rather than
          falling through to the "not set up" branch and passing on a 404. */
-      QUIZ_STUDIO_URL: 'https://quiz.example.test', QUIZ_LAUNCH_SECRET: 'test-secret' },
+      QUIZ_STUDIO_URL: 'https://quiz.example.test', QUIZ_LAUNCH_SECRET: 'test-secret',
+      /* A deployed Academy always has this; the hand-off to Quiz Studio uses it to say where
+         "back to the lesson plan" leads. */
+      BASE_URL: base },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = ''; srv.stdout.on('data', d => log += d); srv.stderr.on('data', d => log += d);
@@ -187,7 +190,8 @@ const get = async url => {
       String((code.text.match(/Code · cell/g) || []).length));
     check('code cells are numbered among themselves, not by notebook position',
       /Code · cell 1/.test(code.text), (code.text.match(/Code · cell \d+/) || [])[0]);
-    check('the Exit button is styled for the dark bar', /\.proj-bar \.btn\{/.test(code.text));
+    check('the back button is styled for the dark bar', /\.proj-bar \.btn\{/.test(code.text));
+    check('and says where it goes rather than just "exit"', /← Lesson plan/.test(code.text));
     check('it offers a text size control for the room', /id="bigger"/.test(code.text));
     check('and a way back to the course', code.text.includes(`/teach/${COURSE}"`));
 
@@ -224,6 +228,19 @@ const get = async url => {
       live.status === 302 && /\/admin\/live\?/.test(live.loc || ''), `${live.status} → ${live.loc}`);
     check('with the quiz already chosen', /quiz=7/.test(live.loc || ''), live.loc);
     check('and the class already chosen', /class=Grade(%20|\+)9/.test(live.loc || ''), live.loc);
+
+    /* The way home. Quiz Studio is a different app, so the teacher only gets back to the lesson
+       plan she left if we hand her the link to it. */
+    const backParam = new URL(live.loc, base).searchParams.get('back');
+    check('and the lesson plan handed over as the way back', !!backParam, live.loc);
+    check('the way back points at this Academy, not somewhere else',
+      backParam && new URL(backParam).origin === new URL(base).origin, String(backParam));
+    check('and lands on the class\'s plan for this course',
+      backParam && new URL(backParam).pathname === `/classes/${encodeURIComponent('Grade 9')}/teach/${COURSE}`,
+      String(backParam));
+
+    const home = await get(new URL(backParam).pathname);
+    check('which is a page she may actually open', home.status === 200, String(home.status));
   }
 
   // --- resetting clears the class, not the students ---

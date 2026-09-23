@@ -15,6 +15,7 @@ const classesLib = require('../classes');
 const pathLib = require('../path');
 const teach = require('../teach');
 const plugins = require('../plugins');
+const onesite = require('../onesite');
 
 const router = express.Router();
 
@@ -207,7 +208,13 @@ router.get('/classes/:name/teach/:courseId/steps/:stepId/live', requireStaff, as
   if (!pathLib.quizEnabled()) {
     return res.status(404).render('error', { title: 'Not available', message: 'Live quizzes are not set up on this Academy yet.' });
   }
-  const url = `${pathLib.QUIZ_URL}/admin/live?quiz=${encodeURIComponent(step.config.quiz_id)}&class=${encodeURIComponent(ctx.name)}`;
+  /* Carry the way home with her. Quiz Studio is a different app, so without this the teacher who
+     finishes a live round has no thread back to the lesson plan she left — she has to find the
+     class again from the top. `back` is an absolute URL on this Academy; Quiz Studio shows it as a
+     link only after checking it belongs here, and hands it on to the host screen. */
+  const back = `${onesite.BASE_URL}/classes/${encodeURIComponent(ctx.name)}/teach/${course.id}`;
+  const url = `${pathLib.QUIZ_URL}/admin/live?quiz=${encodeURIComponent(step.config.quiz_id)}`
+    + `&class=${encodeURIComponent(ctx.name)}&back=${encodeURIComponent(back)}`;
   res.redirect(url);
 });
 
