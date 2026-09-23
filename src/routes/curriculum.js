@@ -36,7 +36,11 @@ router.get('/curricula', requireAdmin, (req, res) => {
       grades: db.prepare('SELECT school_slug, grade, academic_year FROM curriculum_grades WHERE curriculum_id=?').all(c.id),
     };
   });
-  res.render('admin/curricula', { title: 'Curricula', rows, all: cur.list(), schools: schoolsList(), year: cur.currentYear() });
+  /* The grade must match a student's class name exactly, so offer the real ones rather than a
+     free-text box where a typo saves silently and does nothing. */
+  const classesBySchool = Object.fromEntries(schoolsList().map(sc => [sc.slug, enrol.classNamesAt(sc.slug)]));
+  res.render('admin/curricula', { title: 'Curricula', rows, all: cur.list(), schools: schoolsList(),
+    year: cur.currentYear(), classesBySchool });
 });
 
 router.post('/curricula', requireAdmin, (req, res) => {
@@ -101,7 +105,11 @@ router.get('/curricula/:id', requireAdmin, (req, res) => {
     descendants: cur.descendants(c.id),
     others: cur.list().filter(x => x.id !== c.id && !cur.descendants(c.id).some(d => d.id === x.id)),
     addable: q.courses.all().filter(x => !inThis.has(x.id)),
-    classes: c.school_slug ? enrol.classNamesAt(c.school_slug) : [],
+    schools: schoolsList(),
+    /* Every school's class list, so "Apply to a class" works even for a shared template: pick the
+       school, and its classes appear. Without this a template was a dead end — it offered no
+       classes and the settings form had no way to give it a school either. */
+    classesBySchool: Object.fromEntries(schoolsList().map(sc => [sc.slug, enrol.classNamesAt(sc.slug)])),
   });
 });
 
@@ -110,6 +118,7 @@ router.post('/curricula/:id', requireAdmin, (req, res) => {
     cur.update(req.params.id, {
       title: req.body.title,
       description: req.body.description,
+      schoolSlug: req.body.school_slug === undefined ? undefined : (req.body.school_slug || null),
       extendsId: req.body.extends_id === undefined ? undefined : (Number(req.body.extends_id) || null),
       sequential: req.body.sequential === 'on' ? 1 : 0,
       isPublished: req.body.is_published === 'on' ? 1 : 0,
@@ -186,11 +195,24 @@ router.post('/curricula/:id/apply', requireAdmin, (req, res) => {
       note: `Curriculum: ${c.title}`,
       by: req.user.id,
     });
+
+    /* Enrolling a class and saying "this grade is on this curriculum" are two different things,
+       and forgetting the second leaves students enrolled with no ladder and no locking. Offer it
+       here so the common case is one action. */
+    let mapped = [];
+    if (req.body.set_for_grade === 'on') {
+      for (const name of classes) {
+        try { cur.setForGrade(school, name, c.id, cur.currentYear()); mapped.push(name); } catch { /* skip */ }
+      }
+    }
     q.logEvent.run(req.user.id, null, null, 'curriculum_applied',
       JSON.stringify({ curriculum: c.id, title: c.title, classes, courses: courseIds.length, batch: batch.id }));
-    flash(req, 'success', applied
+    const mappedNote = mapped.length
+      ? ` ${mapped.join(', ')} ${mapped.length === 1 ? 'is' : 'are'} now on this curriculum, so students see it as their path.`
+      : '';
+    flash(req, 'success', (applied
       ? `"${c.title}" applied to ${classes.join(', ')} — ${applied.enrolled} enrolment${applied.enrolled === 1 ? '' : 's'} created${applied.skipped ? `, ${applied.skipped} already had theirs` : ''}.`
-      : `"${c.title}" is scheduled for ${classes.join(', ')} and starts on ${batch.starts_on}.`);
+      : `"${c.title}" is scheduled for ${classes.join(', ')} and starts on ${batch.starts_on}.`) + mappedNote);
     return res.redirect('/classes');
   } catch (e) {
     flash(req, 'error', e.message);

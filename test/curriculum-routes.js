@@ -106,6 +106,27 @@ const get = async url => {
   page = await get('/admin/curricula');
   check('and shown as a badge on the list', /Grade 9<\/span>|Grade 9 · 2026-27/.test(page.text));
 
+  // --- a shared template: the case that had no way out ---
+  {
+    const mkT = await post('/admin/curricula', { title: 'Shared template', sequential: 'on' });   // no school
+    const t = (mkT.loc || '').match(/curricula\/(\d+)/);
+    await post(`/admin/curricula/${t[1]}/courses`, { course_id: FOUND, required: 'on' });
+    let tp = await get(`/admin/curricula/${t[1]}`);
+    check('a template still offers Apply to a class', /Apply to a class/.test(tp.text) && /name="classes"/.test(tp.text),
+      'the template had no class picker');
+    check('and its Settings can set a school', /name="school_slug"[\s\S]{0,400}shared template/.test(tp.text),
+      'no school selector on the settings form');
+
+    await post(`/admin/curricula/${t[1]}`, { title: 'Shared template', school_slug: 'darularqam', sequential: 'on' });
+    check('setting the school sticks',
+      sql.prepare('SELECT school_slug FROM curricula WHERE id=?').get(Number(t[1])).school_slug === 'darularqam',
+      JSON.stringify(sql.prepare('SELECT school_slug FROM curricula WHERE id=?').get(Number(t[1]))));
+
+    await post(`/admin/curricula/${t[1]}`, { title: 'Shared template', school_slug: '', sequential: 'on' });
+    check('and can be cleared back to a template',
+      sql.prepare('SELECT school_slug FROM curricula WHERE id=?').get(Number(t[1])).school_slug === null);
+  }
+
   // --- preview writes nothing ---
   const before = sql.prepare('SELECT COUNT(*) n FROM enrollments').get().n;
   const prev = await post(`/admin/curricula/${g9[1]}/apply/preview`, { school_slug: 'darularqam', classes: 'Grade 9' });
@@ -123,6 +144,31 @@ const get = async url => {
   check('three students × four ticked courses were enrolled', made === 12, String(made));
   check('the unticked course enrolled nobody',
     sql.prepare('SELECT COUNT(*) n FROM enrollments WHERE course_id=?').get(PAT).n === 0);
+
+  // --- applying can set the grade mapping in the same step ---
+  {
+    sql.prepare('DELETE FROM curriculum_grades').run();
+    await post(`/admin/curricula/${g9[1]}/apply`, {
+      school_slug: 'darularqam', classes: 'Grade 9', course_ids: [FOUND], set_for_grade: 'on',
+    });
+    const row = sql.prepare('SELECT * FROM curriculum_grades WHERE school_slug=? AND grade=?').get('darularqam', 'Grade 9');
+    check('"also make this the curriculum" saves the grade mapping too',
+      row && row.curriculum_id === Number(g9[1]), JSON.stringify(row));
+
+    sql.prepare('DELETE FROM curriculum_grades').run();
+    await post(`/admin/curricula/${g9[1]}/apply`, {
+      school_slug: 'darularqam', classes: 'Grade 9', course_ids: [FOUND],   // checkbox off
+    });
+    check('and leaving it unticked does not', !sql.prepare('SELECT * FROM curriculum_grades').get());
+    // put it back for the later gate checks
+    await post('/admin/curricula/grades', { school_slug: 'darularqam', grade: 'Grade 9', academic_year: '2026-27', curriculum_id: g9[1] });
+  }
+
+  // --- the grade picker offers real class names ---
+  page = await get('/admin/curricula');
+  check('the grade field is a list of real classes, not free text',
+    /id="gradename"/.test(page.text) && page.text.includes('"darularqam":["Grade 9"]'),
+    'class list not embedded in the page');
 
   // --- applying with nothing ticked is refused ---
   const none = await post(`/admin/curricula/${g9[1]}/apply`, { school_slug: 'darularqam', classes: 'Grade 9' });

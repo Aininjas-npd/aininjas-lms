@@ -54,6 +54,9 @@
     <h3>Settings</h3>
     <label>Name</label><input type="text" name="title" value="<%= c.title %>">
     <label>Description</label><textarea name="description" rows="2"><%= c.description || '' %></textarea>
+    <label>School <span class="muted">(a shared template belongs to no school and cannot enrol classes)</span></label>
+    <select name="school_slug"><option value="">— shared template —</option>
+      <% schools.forEach(sc => { %><option value="<%= sc.slug %>" <%= c.school_slug === sc.slug ? 'selected' : '' %>><%= sc.slug %></option><% }) %></select>
     <label>Builds on</label>
     <select name="extends_id"><option value="">— nothing —</option>
       <% others.forEach(o => { %><option value="<%= o.id %>" <%= c.extends_id === o.id ? 'selected' : '' %>><%= o.title %></option><% }) %></select>
@@ -62,24 +65,52 @@
     <p><button class="btn small">Save</button></p>
   </form>
 
-  <% if (c.school_slug && classes.length) { %>
   <form class="card" method="post" action="/admin/curricula/<%= c.id %>/apply/preview">
     <h3>Apply to a class</h3>
-    <p class="muted small">You will see exactly who gets what before anything is saved.</p>
-    <input type="hidden" name="school_slug" value="<%= c.school_slug %>">
-    <label>Classes</label>
-    <% classes.forEach(n => { %><label class="check"><input type="checkbox" name="classes" value="<%= n %>"> <%= n %></label><% }) %>
-    <label>Start <span class="muted">(optional — blank means now)</span></label><input type="date" name="starts_on">
-    <label>End <span class="muted">(optional)</span></label><input type="date" name="ends_on">
-    <p><button class="btn small">Preview →</button></p>
+    <% const anyClasses = Object.values(classesBySchool).some(l => l.length); %>
+    <% if (!schools.length || !anyClasses) { %>
+      <p class="muted small">No classes to apply this to yet. Classes come from the students themselves — a student's class is set when they are imported or on their user record.</p>
+    <% } else { %>
+      <p class="muted small">You will see exactly who gets what before anything is saved.</p>
+      <label>School</label>
+      <select name="school_slug" id="applyschool" required>
+        <% schools.forEach(sc => { %><option value="<%= sc.slug %>" <%= c.school_slug === sc.slug ? 'selected' : '' %>><%= sc.slug %></option><% }) %>
+      </select>
+      <label>Classes</label>
+      <% schools.forEach(sc => { %>
+        <div class="classgroup" data-school="<%= sc.slug %>" <%= c.school_slug && c.school_slug !== sc.slug ? 'hidden' : '' %>>
+          <% if (!(classesBySchool[sc.slug] || []).length) { %><p class="muted small">No classes at <%= sc.slug %> yet.</p><% } %>
+          <% (classesBySchool[sc.slug] || []).forEach(n => { %>
+            <label class="check"><input type="checkbox" name="classes" value="<%= n %>"> <%= n %></label>
+          <% }) %>
+        </div>
+      <% }) %>
+      <label class="check" style="margin-top:8px"><input type="checkbox" name="set_for_grade" checked>
+        Also make this the curriculum for those grades <span class="muted">— so students see it as their path, with the order locked</span></label>
+      <label>Start <span class="muted">(optional — blank means now)</span></label><input type="date" name="starts_on">
+      <label>End <span class="muted">(optional)</span></label><input type="date" name="ends_on">
+      <p><button class="btn small" type="submit">Preview →</button></p>
+      <% if (!c.school_slug) { %><p class="hint">This curriculum is a shared template. Applying it to a class works, and you can also give it a school under Settings so it stops being offered to everyone.</p><% } %>
+    <% } %>
   </form>
-  <% } else if (!c.school_slug) { %>
-  <div class="card"><h3>Apply to a class</h3><p class="muted small">This is a shared template. Make a copy for a school — or set its school — to enrol classes from it.</p></div>
-  <% } %>
 </div>
 </div>
 
 <script>
+/* Only the selected school's classes should be tickable — otherwise it is possible to enrol a
+   class from one school under another school's slug, which silently matches nobody. */
+(function () {
+  var sel = document.getElementById('applyschool'); if (!sel) return;
+  function show() {
+    document.querySelectorAll('.classgroup').forEach(function (g) {
+      var on = g.dataset.school === sel.value;
+      g.hidden = !on;
+      if (!on) g.querySelectorAll('input[type=checkbox]').forEach(function (b) { b.checked = false; });
+    });
+  }
+  sel.addEventListener('change', show);
+  show();
+})();
 (function () {
   var list = document.getElementById('courselist'); if (!list) return;
   var dragging = null;

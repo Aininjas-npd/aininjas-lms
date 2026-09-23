@@ -91,7 +91,7 @@ function create({ title, description, extendsId, schoolSlug, sequential = 1 }) {
   return byId(info.lastInsertRowid);
 }
 
-function update(id, { title, description, extendsId, sequential, isPublished }) {
+function update(id, { title, description, extendsId, sequential, isPublished, schoolSlug }) {
   const c = byId(id);
   if (!c) throw new Error('Curriculum not found.');
   if (extendsId !== undefined && extendsId) {
@@ -107,10 +107,11 @@ function update(id, { title, description, extendsId, sequential, isPublished }) 
     }
   }
   db.prepare(`UPDATE curricula SET title=COALESCE(?, title), description=COALESCE(?, description),
-              extends_id=?, sequential=COALESCE(?, sequential), is_published=COALESCE(?, is_published) WHERE id=?`)
+              extends_id=?, school_slug=?, sequential=COALESCE(?, sequential), is_published=COALESCE(?, is_published) WHERE id=?`)
     .run(title === undefined ? null : String(title).trim(),
       description === undefined ? null : String(description).trim() || null,
       extendsId === undefined ? c.extends_id : (extendsId || null),
+      schoolSlug === undefined ? c.school_slug : (schoolSlug || null),
       sequential === undefined ? null : (sequential ? 1 : 0),
       isPublished === undefined ? null : (isPublished ? 1 : 0), id);
   return byId(id);
