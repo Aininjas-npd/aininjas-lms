@@ -6,10 +6,11 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node test/curriculum.js && node test/curriculum-routes.js && node test/sideload.js && node test/sideload-routes.js && node test/e2e.js",
+    "test": "node test/teach.js && node test/curriculum.js && node test/curriculum-routes.js && node test/sideload.js && node test/sideload-routes.js && node test/e2e.js",
     "test:e2e": "node test/e2e.js",
     "test:sideload": "node test/sideload.js && node test/sideload-routes.js",
-    "test:curriculum": "node test/curriculum.js && node test/curriculum-routes.js"
+    "test:curriculum": "node test/curriculum.js && node test/curriculum-routes.js",
+    "test:teach": "node test/teach.js"
   },
   "keywords": [],
   "author": "",

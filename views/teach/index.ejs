@@ -1,0 +1,30 @@
+<%- include('../partials/header') %>
+<a href="/classes/<%= encodeURIComponent(name) %>" class="muted small">← <%= name %></a>
+<h1>Teach <%= name %></h1>
+<p class="muted">Where <strong><%= name %></strong> has got to, as a class. Open a lesson here and it picks up where you stopped last time — separately from every other class you teach, and separately from your own progress.</p>
+
+<% if (!courses.length) { %>
+  <p class="muted">This class has no courses yet. Enrol them from the class page, or apply a curriculum.</p>
+<% } %>
+
+<div class="fg2" style="align-items:start">
+<% courses.forEach(c => { const p = c.progress; %>
+  <div class="card">
+    <div class="row between wrap" style="align-items:baseline">
+      <h3 style="margin:0"><a href="/classes/<%= encodeURIComponent(name) %>/teach/<%= c.course.id %>"><%= c.course.title %></a></h3>
+      <span class="muted small"><%= p.done %> of <%= p.total %> steps</span>
+    </div>
+    <div class="bar" style="margin-top:8px"><div style="width:<%= p.percent %>%"></div></div>
+    <p class="small muted" style="margin-top:8px">
+      <% if (!p.started) { %>Not started with this class yet.
+      <% } else if (!p.next) { %>You have been through all of it with <%= name %>.
+      <% } else { %>Next: <strong><%= p.next.step.title %></strong><% if (p.next.partway) { %> <span class="muted">(part way through)</span><% } %><% } %>
+    </p>
+    <p>
+      <a class="btn small" href="/classes/<%= encodeURIComponent(name) %>/teach/<%= c.course.id %>/resume"><%= p.started ? (p.next ? 'Resume teaching' : 'Review') : 'Start teaching' %></a>
+      <a class="btn small ghost" href="/classes/<%= encodeURIComponent(name) %>/teach/<%= c.course.id %>">All steps</a>
+    </p>
+  </div>
+<% }) %>
+</div>
+<%- include('../partials/footer') %>

@@ -1,0 +1,56 @@
+<%- include('../partials/header') %>
+<a href="/classes/<%= encodeURIComponent(name) %>/teach" class="muted small">← Teach <%= name %></a>
+<div class="row between wrap"><h1><%= course.title %></h1>
+  <a class="btn" href="/classes/<%= encodeURIComponent(name) %>/teach/<%= course.id %>/resume"><%= progress.started ? (progress.next ? 'Resume teaching' : 'Review') : 'Start teaching' %></a>
+</div>
+<p class="muted">Teaching <strong><%= name %></strong> · <%= progress.done %> of <%= progress.total %> steps covered · <%= enrolled %> student<%= enrolled === 1 ? '' : 's' %> enrolled.
+  Opening a lesson here records the <em>class's</em> place, not yours and not any student's.</p>
+
+<ol class="path compact">
+<% progress.items.forEach((i, n) => { const st = i.step; %>
+  <li class="step <%= st.type %>" id="step-<%= st.id %>">
+    <div class="num"><%= i.done ? '✓' : n + 1 %></div>
+    <div class="body">
+      <div class="kind"><%= st.kind || st.type %>
+        <% if (st.audience === 'teacher') { %> · <span class="badge">teachers only</span><% } %>
+        <% if (st.audience === 'class') { %> · <span class="badge">in class</span><% } %>
+      </div>
+      <h3 style="<%= i.done ? 'opacity:.75' : '' %>"><%= st.title %></h3>
+      <p class="small muted meta">
+        <% if (i.kind === 'sco') { %>
+          <% if (i.done) { %>Taught<% } else if (i.partway) { %>Part way through — resuming returns to where you stopped<% } else { %>Not taught with this class yet<% } %>
+          <% if (i.lastTaughtAt) { %> · last <%= i.lastTaughtAt.slice(0, 10) %><% if (i.timesTaught > 1) { %>, <%= i.timesTaught %> times<% } %><% } %>
+        <% } else { %>
+          <%= i.done ? 'Covered in class' : 'Not covered yet' %>
+        <% } %>
+      </p>
+      <% const files = (stepFiles || {})[st.id] || []; if (files.length) { %>
+        <p class="small" style="margin-top:4px"><% files.forEach(f => { %>📎 <a href="/courses/<%= course.id %>/steps/<%= st.id %>/files/<%= f.id %>"><%= f.filename %></a> <% }) %></p>
+      <% } %>
+    </div>
+    <div class="act actions">
+      <% if (i.kind === 'sco' && i.scoId) { %>
+        <a class="btn small <%= i.done ? 'ghost' : '' %>" href="/classes/<%= encodeURIComponent(name) %>/teach/<%= course.id %>/play/<%= i.scoId %>"><%= i.partway ? 'Resume' : i.done ? 'Teach again' : 'Teach' %></a>
+        <% if (i.started) { %>
+        <form method="post" action="/classes/<%= encodeURIComponent(name) %>/teach/<%= course.id %>/reset" class="inline" onsubmit="return confirm('Start this lesson from the beginning next time? Student progress is untouched.')">
+          <input type="hidden" name="sco_id" value="<%= i.scoId %>"><button class="link small">reset</button></form>
+        <% } %>
+      <% } else { %>
+        <form method="post" action="/classes/<%= encodeURIComponent(name) %>/teach/<%= course.id %>/steps/<%= st.id %>/covered" class="inline">
+          <% if (i.done) { %><input type="hidden" name="undo" value="1"><% } %>
+          <button class="btn small <%= i.done ? 'ghost' : '' %>"><%= i.done ? 'Not covered' : 'Mark covered' %></button>
+        </form>
+      <% } %>
+    </div>
+  </li>
+<% }) %>
+</ol>
+
+<div class="card" style="margin-top:18px">
+  <h3>Start this course over with <%= name %></h3>
+  <p class="muted small">Next year's class, or a fresh run. This clears only where <strong><%= name %></strong> got to — every student keeps their own progress, scores and grades.</p>
+  <form method="post" action="/classes/<%= encodeURIComponent(name) %>/teach/<%= course.id %>/reset" onsubmit="return confirm('Clear where <%= name %> got to in this course? Student progress is untouched.')">
+    <button class="btn small danger">Clear the class's place</button>
+  </form>
+</div>
+<%- include('../partials/footer') %>

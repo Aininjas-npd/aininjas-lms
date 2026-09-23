@@ -6,7 +6,8 @@
 </head>
 <body class="player">
 <div class="player-bar">
-  <div class="row gap"><a href="/courses/<%= course.id %>" class="btn small ghost" id="exit">✕ Exit</a> <strong><%= course.title %></strong> <span class="muted">› <%= sco.title %></span></div>
+  <div class="row gap"><a href="<%= locals.exitUrl || ('/courses/' + course.id) %>" class="btn small ghost" id="exit">✕ Exit</a> <strong><%= course.title %></strong> <span class="muted">› <%= sco.title %></span>
+    <% if (locals.teaching) { %><span class="badge">teaching <%= teaching.className %></span><% } %></div>
   <div class="row gap">
     <span class="status" id="status">Status: <%= config.initialData.lesson_status %></span>
     <% if (prev) { %><a class="btn small ghost" href="<%= prev.href %>" title="<%= prev.kind %>: <%= prev.title %>">‹ Prev</a><% } %>
@@ -20,7 +21,12 @@
     <div class="cover-box">
       <p class="eyebrow"><%= course.title %></p>
       <h1><%= sco.title %></h1>
-      <p class="muted"><%= config.initialData.entry === 'resume' ? 'You have been here before — the lesson picks up where you left off.' : 'The lesson has sound. Make sure your volume is on.' %></p>
+      <% if (locals.teaching) { %>
+        <p class="muted"><%= config.initialData.entry === 'resume' ? 'Picking up where ' + teaching.className + ' left off last time.' : 'Starting this lesson with ' + teaching.className + ' for the first time.' %></p>
+        <p class="muted small">Nothing here is recorded against any student — this is the class&rsquo;s own place in the lesson.</p>
+      <% } else { %>
+        <p class="muted"><%= config.initialData.entry === 'resume' ? 'You have been here before — the lesson picks up where you left off.' : 'The lesson has sound. Make sure your volume is on.' %></p>
+      <% } %>
       <button class="btn" type="button" id="startBtn" autofocus>▶ <%= config.initialData.entry === 'resume' ? 'Resume lesson' : 'Start lesson' %></button>
     </div>
   </div>

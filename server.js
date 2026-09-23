@@ -63,6 +63,7 @@ app.use(auth.router);
 app.use(require('./src/routes/learner'));
 app.use(require('./src/routes/assign'));    // assignments + gradebook (staff) and the student due list (before classes: /classes/:name/assignments)
 app.use(require('./src/routes/enrol'));     // bulk + scheduled enrolment, course availability (before classes: /classes/enrolments beats /classes/:name)
+app.use(require('./src/routes/teach'));     // before classes: /classes/:name/teach beats /classes/:name
 app.use(require('./src/routes/classes'));   // teacher / school-admin class views + student class picker
 app.use('/admin', require('./src/routes/curriculum'));   // before admin: /admin/curricula/:id beats admin's own patterns
 app.use('/admin', require('./src/routes/admin'));
