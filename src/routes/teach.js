@@ -7,7 +7,9 @@
  * nothing a teacher does here marks a lesson done for anybody.
  */
 const express = require('express');
-const { db, q } = require('../db');
+const fs = require('fs');
+const path = require('path');
+const { db, q, DATA_DIR } = require('../db');
 const { requireStaff, flash } = require('../auth');
 const classesLib = require('../classes');
 const pathLib = require('../path');
@@ -146,6 +148,67 @@ router.post('/classes/:name/teach/:courseId/play/:scoId/commit', requireStaff, e
       finishing ? secs : 0, req.user.id, row.id);
 
   res.json({ ok: true, status });
+});
+
+/* ------------------------------------------------------------- § the code --- */
+
+/**
+ * Put the exercise on the projector.
+ *
+ * Students type the code into their own Colab, so what the room needs is the notebook's cells,
+ * large and readable, with nothing else on screen — not a download, and not the teacher's own
+ * Colab tab with her solutions three cells further down.
+ *
+ * A step that is only a link to Colab has no cells to show, so it offers the link instead.
+ */
+router.get('/classes/:name/teach/:courseId/steps/:stepId/code', requireStaff, async (req, res) => {
+  const ctx = await classCtx(req, res); if (!ctx) return;
+  const course = q.courseById.get(req.params.courseId);
+  if (!course) return res.status(404).render('error', { title: 'Not found', message: 'Course not found.' });
+  const step = pathLib.stepsFor(course.id).find(s => String(s.id) === String(req.params.stepId));
+  if (!step || step.type !== 'colab') return res.status(404).render('error', { title: 'Not found', message: 'That step has no code to show.' });
+
+  let cells = null, readError = null;
+  if (step.config.file) {
+    const file = path.join(DATA_DIR, 'notebooks', path.basename(step.config.file));
+    try {
+      const nb = JSON.parse(fs.readFileSync(file, 'utf8'));
+      cells = (nb.cells || []).map(c => ({
+        type: c.cell_type,
+        source: Array.isArray(c.source) ? c.source.join('') : String(c.source || ''),
+      })).filter(c => c.source.trim());
+    } catch (e) {
+      readError = e.code === 'ENOENT' ? 'The notebook file is missing from the server.' : 'That notebook could not be read as a Jupyter file.';
+    }
+  }
+
+  res.render('teach/code', {
+    title: `${step.title} · ${ctx.name}`,
+    sc: ctx.scope, name: ctx.name, course, step, cells, readError,
+    files: require('../stepfiles').forSteps([step.id])[step.id] || [],
+    covered: teach.coveredSteps(ctx.school, ctx.name).has(step.id),
+    layout: false,
+  });
+});
+
+/* ------------------------------------------------------------ § live quiz --- */
+
+/**
+ * Hand over to Quiz Studio's live host, with the quiz and class already chosen. The session
+ * itself belongs to Quiz Studio — it owns the codes, the players and the scoring — so this is a
+ * signpost, not a second implementation of it.
+ */
+router.get('/classes/:name/teach/:courseId/steps/:stepId/live', requireStaff, async (req, res) => {
+  const ctx = await classCtx(req, res); if (!ctx) return;
+  const course = q.courseById.get(req.params.courseId);
+  if (!course) return res.status(404).render('error', { title: 'Not found', message: 'Course not found.' });
+  const step = pathLib.stepsFor(course.id).find(s => String(s.id) === String(req.params.stepId));
+  if (!step || step.type !== 'quiz') return res.status(404).render('error', { title: 'Not found', message: 'That step is not a quiz.' });
+  if (!pathLib.quizEnabled()) {
+    return res.status(404).render('error', { title: 'Not available', message: 'Live quizzes are not set up on this Academy yet.' });
+  }
+  const url = `${pathLib.QUIZ_URL}/admin/live?quiz=${encodeURIComponent(step.config.quiz_id)}&class=${encodeURIComponent(ctx.name)}`;
+  res.redirect(url);
 });
 
 /* ----------------------------------------------------------------- § steps -- */

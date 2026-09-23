@@ -36,9 +36,15 @@
           <input type="hidden" name="sco_id" value="<%= i.scoId %>"><button class="link small">reset</button></form>
         <% } %>
       <% } else { %>
+        <% if (st.type === 'colab') { %>
+          <a class="btn small" href="/classes/<%= encodeURIComponent(name) %>/teach/<%= course.id %>/steps/<%= st.id %>/code">▣ Show the code</a>
+        <% } %>
+        <% if (st.type === 'quiz' && st.config.quiz_id) { %>
+          <a class="btn small" href="/classes/<%= encodeURIComponent(name) %>/teach/<%= course.id %>/steps/<%= st.id %>/live">▶ Run live</a>
+        <% } %>
         <form method="post" action="/classes/<%= encodeURIComponent(name) %>/teach/<%= course.id %>/steps/<%= st.id %>/covered" class="inline">
           <% if (i.done) { %><input type="hidden" name="undo" value="1"><% } %>
-          <button class="btn small <%= i.done ? 'ghost' : '' %>"><%= i.done ? 'Not covered' : 'Mark covered' %></button>
+          <button class="btn small ghost"><%= i.done ? 'Not covered' : 'Mark covered' %></button>
         </form>
       <% } %>
     </div>

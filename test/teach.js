@@ -34,7 +34,10 @@ const get = async url => {
   const srv = spawn('node', ['server.js'], {
     cwd: ROOT,
     env: { ...process.env, DATA_DIR: DATA, PORT: String(PORT), SESSION_SECRET: 'teach-test',
-      ADMIN_EMAIL: 'admin@test.local', ADMIN_PASSWORD: 'admin12345' },
+      ADMIN_EMAIL: 'admin@test.local', ADMIN_PASSWORD: 'admin12345',
+      /* Quiz Studio configured, so the live hand-off is exercised for real rather than
+         falling through to the "not set up" branch and passing on a 404. */
+      QUIZ_STUDIO_URL: 'https://quiz.example.test', QUIZ_LAUNCH_SECRET: 'test-secret' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = ''; srv.stdout.on('data', d => log += d); srv.stderr.on('data', d => log += d);
@@ -160,6 +163,68 @@ const get = async url => {
   check('and Resume then moves to the last lesson', String(r.loc || '').endsWith(`/play/${L2}`), `${r.status} → ${r.loc}`);
   await post(`/classes/Grade%209/teach/${COURSE}/steps/${COLAB}/covered`, { undo: '1' });
   check('and can be unticked', !sql.prepare('SELECT * FROM class_steps WHERE class_name=? AND step_id=?').get('Grade 9', COLAB));
+
+  // --- showing the exercise code on the projector ---
+  {
+    // give the Colab step a real notebook file
+    const nbDir = path.join(DATA, 'notebooks');
+    fs.mkdirSync(nbDir, { recursive: true });
+    fs.writeFileSync(path.join(nbDir, 'ex1.ipynb'), JSON.stringify({
+      cells: [
+        { cell_type: 'markdown', source: ['# Exercise 1\n', 'Type this into your own Colab.'] },
+        { cell_type: 'code', source: ['import numpy as np\n', 'print(np.arange(5))'] },
+        { cell_type: 'code', source: ['   \n'] },                       // blank: should be dropped
+      ],
+    }));
+    sql.prepare('UPDATE path_steps SET config=? WHERE id=?')
+      .run(JSON.stringify({ file: 'ex1.ipynb', filename: 'ex1.ipynb' }), COLAB);
+
+    const code = await get(`/classes/Grade%209/teach/${COURSE}/steps/${COLAB}/code`);
+    check('the code page opens', code.status === 200, String(code.status));
+    check('it shows the code cell', code.text.includes('import numpy as np') && code.text.includes('print(np.arange(5))'));
+    check('and the markdown notes', /Type this into your own Colab/.test(code.text));
+    check('empty cells are dropped', (code.text.match(/Code · cell/g) || []).length === 1,
+      String((code.text.match(/Code · cell/g) || []).length));
+    check('code cells are numbered among themselves, not by notebook position',
+      /Code · cell 1/.test(code.text), (code.text.match(/Code · cell \d+/) || [])[0]);
+    check('the Exit button is styled for the dark bar', /\.proj-bar \.btn\{/.test(code.text));
+    check('it offers a text size control for the room', /id="bigger"/.test(code.text));
+    check('and a way back to the course', code.text.includes(`/teach/${COURSE}"`));
+
+    // a missing file must say so rather than crash
+    sql.prepare('UPDATE path_steps SET config=? WHERE id=?').run(JSON.stringify({ file: 'gone.ipynb' }), COLAB);
+    const missing = await get(`/classes/Grade%209/teach/${COURSE}/steps/${COLAB}/code`);
+    check('a missing notebook is explained, not a crash', missing.status === 200 && /missing from the server/.test(missing.text), String(missing.status));
+
+    // a link-only step offers the link
+    sql.prepare('UPDATE path_steps SET config=? WHERE id=?')
+      .run(JSON.stringify({ url: 'https://colab.research.google.com/x' }), COLAB);
+    const linked = await get(`/classes/Grade%209/teach/${COURSE}/steps/${COLAB}/code`);
+    check('a link-only step offers the Colab link instead',
+      /no cells to put on screen/.test(linked.text) && linked.text.includes('colab.research.google.com'));
+
+    // and a lesson step has no code page
+    const notCode = await get(`/classes/Grade%209/teach/${COURSE}/steps/999999/code`);
+    check('a step that is not a Colab has no code page', notCode.status === 404, String(notCode.status));
+  }
+
+  // --- handing a quiz step to the live host ---
+  {
+    sql.prepare(`INSERT INTO path_steps (course_id, sort_order, type, title, config, audience)
+                 VALUES (?,3,'quiz','Check · Level 1 quiz',?,'class')`)
+      .run(COURSE, JSON.stringify({ quiz_id: 7, quiz_title: 'Level 1' }));
+    const QUIZ = sql.prepare("SELECT id FROM path_steps WHERE course_id=? AND type='quiz'").get(COURSE).id;
+
+    const page = await get(`/classes/Grade%209/teach/${COURSE}`);
+    check('a quiz step offers Run live', page.text.includes(`/steps/${QUIZ}/live`), 'no Run live button');
+    check('and a Colab step offers Show the code', page.text.includes(`/steps/${COLAB}/code`), 'no Show the code button');
+
+    const live = await get(`/classes/Grade%209/teach/${COURSE}/steps/${QUIZ}/live`);
+    check('Run live hands over to the live host',
+      live.status === 302 && /\/admin\/live\?/.test(live.loc || ''), `${live.status} → ${live.loc}`);
+    check('with the quiz already chosen', /quiz=7/.test(live.loc || ''), live.loc);
+    check('and the class already chosen', /class=Grade(%20|\+)9/.test(live.loc || ''), live.loc);
+  }
 
   // --- resetting clears the class, not the students ---
   sql.prepare(`INSERT INTO sco_progress (user_id, sco_id, lesson_status, lesson_location) VALUES (?,?,'completed','9')`).run(aisha, L1);

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title><%= step.title %> · <%= name %></title><link rel="icon" type="image/png" href="/icon.png">
+<link rel="stylesheet" href="/aininjas-app.css?v=20260913b"><link rel="stylesheet" href="/style.css?v=20260913b">
+<style>
+  /* Sized for a projector at the back of a classroom, not for a laptop. */
+  body.proj{background:#171B26;color:#F6F3EC;margin:0;font-family:Archivo,system-ui,sans-serif}
+  .proj-bar{position:sticky;top:0;z-index:5;display:flex;gap:12px;align-items:center;justify-content:space-between;
+    padding:10px 18px;background:#0F1219;border-bottom:1px solid #2A2F3D}
+  .proj-bar .t{font-weight:700}
+  .proj-bar .muted{color:#8A8F9C}
+  .proj-wrap{max-width:1500px;margin:0 auto;padding:22px 18px 80px}
+  .cell{margin:0 0 20px}
+  .cell .lbl{font:600 12px/1 Archivo,sans-serif;letter-spacing:2px;text-transform:uppercase;color:#8A8F9C;margin-bottom:6px}
+  pre.code{margin:0;background:#0F1219;border:1px solid #2A2F3D;border-left:4px solid #E8863A;border-radius:8px;
+    padding:16px 18px;overflow-x:auto;white-space:pre;font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:var(--cs,20px);line-height:1.5;color:#F6F3EC}
+  .md{font-size:calc(var(--cs,20px) * .95);line-height:1.6;color:#D8DCE4;white-space:pre-wrap;
+    border-left:4px solid #3A4152;padding-left:14px}
+  .zoom button{background:#232837;color:#F6F3EC;border:1px solid #3A4152;border-radius:6px;padding:4px 12px;
+    font:600 16px/1 Archivo,sans-serif;cursor:pointer}
+  /* The app's own .btn styles assume a light page, so on this dark bar they come out invisible. */
+  .proj-bar .btn{background:#232837;color:#F6F3EC;border:1px solid #3A4152}
+  .proj-bar .btn.ghost{background:transparent}
+  .proj-bar .btn:hover{background:#2E3547}
+  .empty{padding:40px 0;color:#8A8F9C}
+  .lnk{color:#E8863A}
+  @media print{ body.proj{background:#fff;color:#000} .proj-bar{display:none} pre.code{background:#fff;color:#000;border-color:#ccc} }
+</style>
+</head>
+<body class="proj">
+<div class="proj-bar">
+  <div class="row gap" style="align-items:center">
+    <a class="btn small ghost" href="/classes/<%= encodeURIComponent(name) %>/teach/<%= course.id %>">✕ Exit</a>
+    <span class="t"><%= step.title %></span>
+    <span class="muted">· <%= course.title %> · <%= name %></span>
+  </div>
+  <div class="row gap zoom" style="align-items:center">
+    <span class="muted small">Text size</span>
+    <button type="button" id="smaller" aria-label="Smaller">−</button>
+    <button type="button" id="bigger" aria-label="Bigger">+</button>
+    <% if (!covered) { %>
+    <form method="post" action="/classes/<%= encodeURIComponent(name) %>/teach/<%= course.id %>/steps/<%= step.id %>/covered" style="margin:0">
+      <button class="btn small">Mark covered</button></form>
+    <% } else { %><span class="badge">covered</span><% } %>
+  </div>
+</div>
+
+<div class="proj-wrap" id="wrap">
+  <% if (readError) { %>
+    <p class="empty"><%= readError %></p>
+  <% } else if (cells && cells.length) { %>
+    <% let codeNo = 0; %>
+    <% cells.forEach(c => { if (c.type === 'code') codeNo++; %>
+      <div class="cell">
+        <div class="lbl"><%= c.type === 'code' ? 'Code · cell ' + codeNo : 'Notes' %></div>
+        <% if (c.type === 'code') { %><pre class="code"><%= c.source.replace(/\s+$/, '') %></pre>
+        <% } else { %><div class="md"><%= c.source.replace(/\s+$/, '') %></div><% } %>
+      </div>
+    <% }) %>
+  <% } else if (step.config.url) { %>
+    <p class="empty">This step is a link to Colab rather than an uploaded notebook, so there are no cells to put on screen.</p>
+    <p><a class="lnk" href="<%= step.config.url %>" target="_blank" rel="noopener">Open it in Colab →</a></p>
+  <% } else { %>
+    <p class="empty">Nothing attached to this step yet.</p>
+  <% } %>
+
+  <% if (files && files.length) { %>
+    <p class="muted small" style="margin-top:30px">Data files for this step:
+      <% files.forEach(f => { %><a class="lnk" href="/courses/<%= course.id %>/steps/<%= step.id %>/files/<%= f.id %>"><%= f.filename %></a> <% }) %></p>
+  <% } %>
+</div>
+
+<script>
+  /* The right text size depends on the room, so leave it to the teacher and remember her choice. */
+  (function () {
+    var wrap = document.getElementById('wrap'), size = 20;
+    try { size = parseInt(localStorage.getItem('ain-code-size'), 10) || 20; } catch (e) {}
+    function apply() {
+      wrap.style.setProperty('--cs', size + 'px');
+      try { localStorage.setItem('ain-code-size', String(size)); } catch (e) {}
+    }
+    document.getElementById('bigger').onclick = function () { size = Math.min(48, size + 2); apply(); };
+    document.getElementById('smaller').onclick = function () { size = Math.max(12, size - 2); apply(); };
+    apply();
+  })();
+</script>
+</body></html>
