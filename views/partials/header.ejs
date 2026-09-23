@@ -19,7 +19,7 @@
   <button class="navtoggle" type="button" aria-controls="sitenav" aria-expanded="false" aria-label="Open menu" onclick="var n=document.getElementById('sitenav');n.classList.toggle('open');this.setAttribute('aria-expanded',n.classList.contains('open'))"><span></span><span></span><span></span></button>
   <nav class="sub" id="sitenav" aria-label="Primary">
     <% if (user && user.status === 'approved') { %>
-      <% shellNav.forEach(n => { %><a href="<%= n.href %>" class="<%= n.on ? 'on' : '' %>"><%= n.label %></a><% }) %>
+      <% shellNav.forEach(n => { %><a href="<%= n.out ? withBack(n.href, title) : n.href %>" class="<%= n.on ? 'on' : '' %>"><%= n.label %></a><% }) %>
       <div class="right">
         <a href="/profile" class="who <%= path === '/profile' ? 'on' : '' %>"><b><%= user.name %></b><small><%= { admin: 'Administrator', school_admin: 'School Admin', teacher: 'Teacher' }[user.role] || 'Learner' %></small></a>
         <% if (locals.accountHref) { %><a href="<%= accountHref %>" title="Your AI Ninjas account">Account</a><% } %>

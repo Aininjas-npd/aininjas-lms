@@ -99,6 +99,19 @@ const get = async url => {
   const classPage = await get('/classes/Grade%209');
   check('the class page has a Teach button', /\/classes\/Grade(%20| )9\/teach/.test(classPage.text), 'no Teach link');
 
+  /* Assessments lives in another app, so the menu hands over the page she is leaving — otherwise
+     Grade 9 → Assessments → By Class strands her with the browser's Back button. */
+  {
+    const href = (classPage.text.match(/href="(https:\/\/quiz\.example\.test[^"]*)"/) || [])[1];
+    check('the Assessments menu item carries where she came from', !!href && /back=/.test(href), String(href));
+    const u = href ? new URL(href.replace(/&amp;/g, '&')) : null;
+    check('back points at the class page she was on',
+      u && u.searchParams.get('back') === `${base}/classes/${encodeURIComponent('Grade 9')}`,
+      u && u.searchParams.get('back'));
+    check('and names it, so the link can say where it goes',
+      u && u.searchParams.get('back_label') === 'Grade 9', u && u.searchParams.get('back_label'));
+  }
+
   const idx = await get('/classes/Grade%209/teach');
   check('the teach page lists the class\'s course', idx.status === 200 && idx.text.includes('AI Foundations'), String(idx.status));
   check('and says it has not been started', /Not started with this class/.test(idx.text));

@@ -38,6 +38,9 @@ app.use((req, res, next) => {                    // template globals
   res.locals.path = req.path;
   res.locals.ssoEnabled = auth.ssoEnabled; res.locals.accountsUrl = auth.accountsUrl;
   res.locals.shellNav = shell.navFor(req.user, req.path, res.locals.pluginNav, !!req.actor);
+  /* For menu items that leave the Academy: hand the other app the page she is on, so it can offer
+     the way back. The header partial supplies the page's own title as the label. */
+  res.locals.withBack = (href, label) => shell.withBack(href, req.originalUrl || req.path, label);
   res.locals.accountsBase = onesite.accounts.configured ? (onesite.accounts.on ? onesite.accounts.prefix : onesite.accounts.public) : null;   // "/account" in one-site mode
   res.locals.ssoAppSlug = process.env.SSO_APP_SLUG || 'lms';
   res.locals.accountHref = req.user && !req.actor && req.user.sso_sub && res.locals.accountsBase ? res.locals.accountsBase + '/' : null;

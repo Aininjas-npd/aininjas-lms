@@ -15,7 +15,7 @@ const classesLib = require('../classes');
 const pathLib = require('../path');
 const teach = require('../teach');
 const plugins = require('../plugins');
-const onesite = require('../onesite');
+const shell = require('../shell');
 
 const router = express.Router();
 
@@ -212,9 +212,10 @@ router.get('/classes/:name/teach/:courseId/steps/:stepId/live', requireStaff, as
      finishes a live round has no thread back to the lesson plan she left — she has to find the
      class again from the top. `back` is an absolute URL on this Academy; Quiz Studio shows it as a
      link only after checking it belongs here, and hands it on to the host screen. */
-  const back = `${onesite.BASE_URL}/classes/${encodeURIComponent(ctx.name)}/teach/${course.id}`;
-  const url = `${pathLib.QUIZ_URL}/admin/live?quiz=${encodeURIComponent(step.config.quiz_id)}`
-    + `&class=${encodeURIComponent(ctx.name)}&back=${encodeURIComponent(back)}`;
+  const plan = `/classes/${encodeURIComponent(ctx.name)}/teach/${course.id}`;
+  const url = shell.withBack(
+    `${pathLib.QUIZ_URL}/admin/live?quiz=${encodeURIComponent(step.config.quiz_id)}&class=${encodeURIComponent(ctx.name)}`,
+    plan, `${course.title} · ${ctx.name}`);
   res.redirect(url);
 });
 
