@@ -359,13 +359,25 @@ router.post('/api/runtime/:scoId/commit', express.json({ limit: '1mb' }), (req, 
   res.json({ ok: true, status, percent: summary.percent, courseStatus: summary.status });
 });
 
-// ---- Serve course content (only to enrolled users / admins) ----
+/* ---- Serve course content ----
+ *
+ * Who may fetch the lesson files has to match who may open the player, or the page loads and the
+ * iframe inside it says "Forbidden" — which is exactly what happened to teachers: a teacher is not
+ * enrolled in the courses she teaches, so she could open a lesson and never see it. The rule is
+ * the same one mayOpenCourse uses:
+ *
+ *   admin    everything
+ *   staff    any course offered to their school — they teach it, they do not enrol in it
+ *   learner  only with a live enrolment
+ */
 router.get('/content/:slug/*file', requireLogin, (req, res) => {
   const course = q.courseBySlug.get(req.params.slug);
   if (!course) return res.sendStatus(404);
   if (req.user.role !== 'admin') {
-    const e = q.enrollment.get(req.user.id, course.id);
-    if (!e || e.status !== 'active') return res.sendStatus(403);
+    const allowed = pathLib.isStaff(req.user)
+      ? require('../enrol').courseOpenTo(course.id, req.user.school_slug)
+      : (() => { const e = q.enrollment.get(req.user.id, course.id); return !!e && e.status === 'active'; })();
+    if (!allowed) return res.sendStatus(403);
   }
   const root = path.join(DATA_DIR, 'courses', course.slug);
   const file = path.normalize(path.join(root, [].concat(req.params.file).join('/')));

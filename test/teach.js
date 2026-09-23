@@ -110,6 +110,16 @@ const get = async url => {
     'missing, or a stray backslash in the apostrophe');
   check('it commits to the class endpoint', player.text.includes(`/teach/${COURSE}/play/${L1}/commit`));
 
+  // --- the lesson files themselves must be fetchable, or the iframe says Forbidden ---
+  {
+    const dir = path.join(DATA, 'courses', 'ai-foundations');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'index.html'), '<html><body>lesson</body></html>');
+    const asTeacher = await get('/content/ai-foundations/index.html');
+    check('a teacher can fetch the lesson files she is teaching', asTeacher.status === 200,
+      `${asTeacher.status} — the player shell loads but the lesson iframe is refused`);
+  }
+
   // --- teach part of it, then stop ---
   await post(`/classes/Grade%209/teach/${COURSE}/play/${L1}/commit`,
     { cmi: { core: { lesson_status: 'incomplete', lesson_location: '5', exit: 'suspend' }, suspend_data: 'slide5' }, elapsed_seconds: 300 }, true);
@@ -171,6 +181,17 @@ const get = async url => {
   check('a teacher cannot teach a class that is not hers', denied.status === 403, String(denied.status));
   const deniedPlay = await get(`/classes/Grade%209/teach/${COURSE}/play/${L1}`);
   check('nor open its player', deniedPlay.status === 403, String(deniedPlay.status));
+
+  // --- content is still closed to a learner who is not enrolled ---
+  {
+    sql.prepare(`INSERT INTO users (name,email,role,status,school_slug,class_name,password_hash)
+                 VALUES ('Nobody','nobody@d.edu','learner','approved','darularqam','Grade 9',?)`)
+      .run(bcrypt.hashSync('ninja12345', 10));
+    cookie = '';
+    await post('/login', { email: 'nobody@d.edu', password: 'ninja12345' });
+    const r2 = await get('/content/ai-foundations/index.html');
+    check('an unenrolled learner still cannot fetch lesson files', r2.status === 403, String(r2.status));
+  }
 
   // --- a student cannot reach any of it ---
   sql.prepare('UPDATE users SET password_hash=? WHERE email=?').run(bcrypt.hashSync('ninja12345', 10), 'aisha@d.edu');
