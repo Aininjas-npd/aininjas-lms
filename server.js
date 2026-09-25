@@ -17,6 +17,27 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.set('trust proxy', 1);                       // behind nginx / Railway / Render
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1d' }));
+/*
+ * Health check, for Railway.
+ *
+ * Without one, a deploy swaps containers blind: the new one is sent traffic the moment it starts,
+ * and anyone who clicks during those seconds gets Railway's own "Application failed to respond"
+ * page — which is served by Railway's edge before any of our code runs, so it cannot be styled or
+ * replaced. A health check is the way to not produce it: Railway keeps the old container serving
+ * until this answers 200. Set the service's Healthcheck Path to /healthz (railway.json does it for
+ * a fresh deploy; an existing service needs it set once in Settings → Deploy).
+ *
+ * It touches the database on purpose: a container that is listening but cannot read its volume is
+ * not healthy, and should not be given the traffic.
+ */
+app.get('/healthz', (req, res) => {
+  try {
+    const n = db.prepare('SELECT COUNT(*) n FROM users').get().n;
+    res.json({ ok: true, users: n, base_path: '/', one_site: { quiz: onesite.quiz.on, accounts: onesite.accounts.on } });
+  } catch (e) {
+    res.status(503).json({ ok: false, error: 'database unavailable' });
+  }
+});
 app.get('/favicon.ico', (req, res) => res.sendFile(path.join(__dirname, 'public', 'favicon.png')));   // browsers ask for this on pages without an icon link
 
 // Sessions persisted in SQLite so logins survive restarts.

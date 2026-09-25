@@ -28,7 +28,27 @@ function mount(app, { prefix, target, secret, shell, log = console }) {
   const client = t.protocol === 'https:' ? https : http;
   const agent = new client.Agent({ keepAlive: true, maxSockets: 64 });
 
-  const unavailable = () => `<!doctype html><meta charset="utf-8"><title>Temporarily unavailable</title><main style="font-family:system-ui;max-width:520px;margin:80px auto;padding:0 20px"><h1>That part of the Academy is waking up</h1><p>Please try again in a moment. If this keeps happening, tell your teacher or AI Ninjas admin.</p><p><a href="/">Back to the Academy</a></p></main>`;
+  /*
+   * What someone sees when the app behind this prefix is not answering — mid-deploy, restarting,
+   * or busy. It is deliberately self-contained (no stylesheet, no fonts, no JS): the reason we are
+   * here at all may be that the site is struggling, and a page that needs three more requests to
+   * render is the wrong thing to send. It retries itself once after eight seconds, which covers
+   * the usual case of a container coming back up.
+   */
+  const label = prefix === '/account' ? 'Sign-in' : prefix === '/assess' ? 'Assessments' : 'That part of the Academy';
+  const unavailable = () => `<!doctype html><html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>${label} is coming back</title>
+<style>body{background:#F6F3EC;color:#171B26;font-family:Archivo,system-ui,-apple-system,sans-serif;margin:0}
+main{max-width:560px;margin:14vh auto 0;padding:0 24px}
+.bar{height:6px;background:#B3232F;border-radius:3px;width:64px;margin-bottom:26px}
+h1{font-size:28px;line-height:1.2;margin:0 0 12px}p{font-size:16px;line-height:1.6;color:#3A4152;margin:0 0 14px}
+.muted{color:#6B6A63;font-size:14px}a{color:#B3232F}</style>
+<main><div class="bar"></div>
+<h1>${label} is coming back</h1>
+<p>This part of AI Ninjas Academy restarted a moment ago and is not ready yet. Nothing has been lost — wait a few seconds and try again.</p>
+<p class="muted">This page refreshes itself shortly. If it is still here in a minute or two, tell your teacher or AI Ninjas, and mention the time.</p>
+<p><a href="/">Back to the Academy</a></p></main>
+<script>setTimeout(function(){location.reload();},8000)</script></html>`;
   app.use(prefix, (req, res) => {
     const headers = {};
     for (const [k, v] of Object.entries(req.headers)) if (!HOP.has(k)) headers[k] = v;

@@ -96,6 +96,17 @@ const get = async url => {
   check('the teacher signs in', login.status === 302 && !/login/.test(login.loc || ''), `${login.status} → ${login.loc}`);
 
   // --- the class page offers it ---
+  /* Railway serves its own "Application failed to respond" page whenever this container does not
+     answer, so the way to never show it is a health check it can poll. */
+  {
+    const h = await get('/healthz');
+    let body = null; try { body = JSON.parse(h.text); } catch {}
+    check('there is a health check for the platform to poll', h.status === 200 && body && body.ok === true,
+      `${h.status} ${h.text.slice(0, 60)}`);
+    check('and it proves the database is readable, not just that the port is open',
+      body && typeof body.users === 'number', h.text.slice(0, 80));
+  }
+
   const classPage = await get('/classes/Grade%209');
   check('the class page has a Teach button', /\/classes\/Grade(%20| )9\/teach/.test(classPage.text), 'no Teach link');
 
