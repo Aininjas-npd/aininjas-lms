@@ -35,7 +35,7 @@ require('./src/fonts').mount(app, { cssPath: path.join(__dirname, 'public', 'fon
 app.get('/healthz', (req, res) => {
   try {
     const n = db.prepare('SELECT COUNT(*) n FROM users').get().n;
-    res.json({ ok: true, users: n, base_path: '/', one_site: { quiz: onesite.quiz.on, accounts: onesite.accounts.on }, backup: backup.status() });
+    res.json({ ok: true, users: n, base_path: '/', one_site: { quiz: onesite.quiz.on, accounts: onesite.accounts.on }, backup: backup.status(), stripe: { key: !!process.env.STRIPE_SECRET_KEY, webhook_secret: !!process.env.STRIPE_WEBHOOK_SECRET, test_mode: /_test_/.test(process.env.STRIPE_SECRET_KEY || '') } });
   } catch (e) {
     res.status(503).json({ ok: false, error: 'database unavailable' });
   }

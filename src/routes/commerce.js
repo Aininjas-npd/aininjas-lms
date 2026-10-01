@@ -62,6 +62,7 @@ pub.get('/welcome', async (req, res) => {
 });
 
 /* Stripe → us. Raw body is required for the signature check; mounted BEFORE any JSON/urlencoded parser. */
+pub.get('/api/stripe/webhook', (req, res) => res.status(405).json({ ok: true, note: 'This endpoint accepts POST from Stripe only. Opening it in a browser is not a test; use "Send test event" in the Stripe dashboard.' }));
 pub.post('/api/stripe/webhook', express.raw({ type: '*/*', limit: '2mb' }), async (req, res) => {
   try {
     const result = await commerce.handleWebhook(req.body, req.headers['stripe-signature']);
