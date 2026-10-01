@@ -214,3 +214,20 @@ A learner's progress counts only their own steps, so a course of two student ste
 **Data files for a step.** Any step on a learning path can carry attachments — the CSVs a notebook reads, a worksheet, images, a zip, a teacher's answer set. On **Admin → Courses → Edit path**, each step has **Attach data files** (several at once, with an optional "what these are" note); on the course page they appear under that step as download links, and for a Colab step with the reminder *download, then in Colab use the 📁 Files panel → Upload*. CSV, TSV, JSON, Excel, Parquet, zip, images, PDF, .ipynb, .py, audio and video are accepted, 100 MB each; `.html`, `.svg` and `.js` are refused on purpose.
 
 Attachments follow the step's audience: files on a teachers-only step cannot be downloaded by a learner, by link or otherwise. They live in `DATA_DIR/stepfiles` under random names (the original filename is kept in the database), and a new course version gets its own copies.
+
+## Backups, deletion and export (NDPA)
+
+- **Nightly backup**: with the `BACKUP_*` variables set (see `.env.example`) the app snapshots its database and tars
+  everything under `DATA_DIR`, encrypts it (AES-256-GCM, `BACKUP_ENC_KEY`) and uploads it to the bucket at
+  `BACKUP_HOUR_UTC`; copies older than `BACKUP_KEEP_DAYS` (35) are deleted. `/healthz` shows `backup.last_ok`,
+  `last_error` and `next_at`. Run one now with `npm run backup`.
+- **Restore**: `npm run restore -- list`, then `npm run restore -- latest --yes` (or a key) with the app stopped, then
+  start it again. On Railway: `railway ssh` into the service, run the restore, redeploy. Test a restore on staging
+  before you ever need one.
+- **Erase a person**: in AI Ninjas Accounts → Users → *Delete everywhere*. Accounts sends `user.deleted` to every app;
+  the Academy hard-deletes its rows (including `events`) and asks Quiz Studio to purge the student's attempts and
+  profile; the Accounts Activity log keeps the disposition record (counts, no data).
+- **Copy of a person's data**: Accounts → Users → *Export data* (a zip of JSON + CSV from all three apps), or the
+  Academy's Admin → Users → *export data* for the Academy/Quiz Studio part alone.
+- **Erase a school**: Academy → Admin → Users → filter by school → *Delete all data for …* (every member via
+  Accounts, batches and course links, then the school's record and results in Quiz Studio).

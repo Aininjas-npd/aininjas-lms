@@ -37,7 +37,18 @@
       <% if (u.status === 'approved' && u.id !== user.id) { %><form method="post" action="/admin/users/<%= u.id %>/disable"><button class="btn small ghost">Disable</button></form><% } %>
       <% if (['disabled','rejected'].includes(u.status)) { %><form method="post" action="/admin/users/<%= u.id %>/enable"><button class="btn small ghost">Re-enable</button></form><% } %>
       <% if (u.role !== 'admin') { %><form method="post" action="/admin/users/<%= u.id %>/make-admin"><button class="link small">make admin</button></form><% } else if (u.id !== user.id) { %><form method="post" action="/admin/users/<%= u.id %>/make-learner"><button class="link small">remove admin</button></form><% } %>
+      <a class="link small" href="/admin/users/<%= u.id %>/export.json" title="Everything the Academy and Quiz Studio hold about this person, as JSON">export data</a>
+      <% if (u.id !== user.id && !u.sso_sub) { %><form method="post" action="/admin/users/<%= u.id %>/delete" onsubmit="return confirm('Permanently delete <%= u.name %> and all their progress, quiz results and records? This cannot be undone.')"><button class="link small danger">delete permanently</button></form><% } else if (u.id !== user.id && locals.accountsBase) { %><a class="link small" href="<%= accountsBase %>/admin/users/<%= u.sso_sub %>" title="This person signs in through AI Ninjas Accounts — delete them there to erase them from every app">delete via Accounts</a><% } %>
     </td></tr>
 <% }) %>
 </tbody></table>
+<% if (fSchool) { const sch = schools.find(s => s.slug === fSchool) || { name: fSchool }; %>
+<details class="card" style="margin-top:24px;border-color:#9B2019">
+  <summary><strong>Delete all data for <%= sch.name %></strong> <span class="muted small">— every student and staff member of this school (via Accounts), its enrolment batches, and its record and results in Quiz Studio. Irreversible.</span></summary>
+  <form method="post" action="/admin/schools/<%= fSchool %>/purge" class="row gap" style="margin-top:10px" onsubmit="return confirm('This permanently deletes <%= sch.name %> everywhere. Continue?')">
+    <label>Type <code><%= fSchool %></code> to confirm <input name="confirm" autocomplete="off" style="width:220px"></label>
+    <button class="btn small danger">Delete school permanently</button>
+  </form>
+</details>
+<% } %>
 <%- include('../partials/footer') %>

@@ -10,12 +10,17 @@
     "test:e2e": "node test/e2e.js",
     "test:sideload": "node test/sideload.js && node test/sideload-routes.js",
     "test:curriculum": "node test/curriculum.js && node test/curriculum-routes.js && node test/curriculum-access.js",
-    "test:teach": "node test/teach.js"
+    "test:teach": "node test/teach.js",
+    "backup": "node scripts/backup.js",
+    "restore": "node scripts/restore.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@fontsource-variable/archivo": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/source-serif-4": "^5.3.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
     "cookie-parser": "^1.4.7",

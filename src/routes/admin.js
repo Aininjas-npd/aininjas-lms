@@ -4,7 +4,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { db, q, DATA_DIR, courseSummary } = require('../db');
-const { requireAdmin, flash, syncAllFromAccounts } = require('../auth');
+const { requireAdmin, flash, syncAllFromAccounts, accountsApi } = require('../auth');
+const privacy = require('../privacy');
 const { importPackage, createCourse, addPackageToCourse, removePackage, packagesFor, deleteCourse } = require('../scorm');
 const plugins = require('../plugins');
 const pathLib = require('../path');
@@ -444,8 +445,39 @@ router.post('/users/:id/:action', (req, res) => {
     if (status === 'approved') plugins.emit('user:approved', { userId: u.id });
   } else if (req.params.action === 'make-admin') db.prepare(`UPDATE users SET role='admin' WHERE id=?`).run(u.id);
   else if (req.params.action === 'make-learner') db.prepare(`UPDATE users SET role='learner' WHERE id=?`).run(u.id);
-  else if (req.params.action === 'delete') db.prepare('DELETE FROM users WHERE id=?').run(u.id);
+  else if (req.params.action === 'delete') {
+    // hard delete here and in Quiz Studio (NDPA 4.6). A person who signs in through Accounts should be deleted THERE
+    // (Accounts → Users → Delete), which erases them from every app at once; this handles local-only accounts.
+    return privacy.purgeUser(u, { by: req.user.id }).then(r => {
+      flash(req, 'success', `${u.name} deleted — Academy rows removed; Quiz Studio: ${r.quiz_studio ? JSON.stringify(r.quiz_studio) : (r.quiz_studio_error || 'not configured')}.`);
+      res.redirect('/admin/users');
+    }).catch(e => { flash(req, 'error', 'Delete failed: ' + e.message); res.redirect(req.get('Referer') || '/admin/users'); });
+  }
   res.redirect(req.get('Referer') || '/admin/users');
+});
+/* Everything the Academy (and Quiz Studio) holds about one person, as JSON — NDPA 2.2 access/copy requests.
+   Accounts offers the same as a zip across all three apps. */
+router.get('/users/:id/export.json', (req, res) => {
+  const u = q.userById.get(req.params.id);
+  if (!u) return res.sendStatus(404);
+  privacy.exportUser(u).then(data => {
+    q.logEvent.run(null, null, null, 'user_exported', JSON.stringify({ ref: u.id, by: req.user.id }));
+    res.setHeader('Content-Disposition', `attachment; filename="academy-export-${u.id}.json"`);
+    res.json(data);
+  }).catch(e => res.status(500).send(e.message));
+});
+/* Delete a whole school: every student and staff member of it (through Accounts when they sign in there), its
+   enrolment batches and course links here, and its record and results in Quiz Studio. Irreversible; the admin
+   must retype the slug. */
+router.post('/schools/:slug/purge', (req, res) => {
+  const slug = String(req.params.slug || '').toLowerCase();
+  if (!brand.SLUG_RE.test(slug) || String(req.body.confirm || '').toLowerCase() !== slug) { flash(req, 'error', 'Type the school link name exactly to confirm.'); return res.redirect('/admin/users?school=' + encodeURIComponent(slug)); }
+  const accountsDelete = accountsApi ? email => accountsApi('/users/' + encodeURIComponent(email), { method: 'DELETE' }) : null;
+  privacy.purgeSchool(slug, { by: req.user.id, accountsDelete }).then(r => {
+    const failed = r.people.filter(p => p.error).length;
+    flash(req, failed ? 'error' : 'success', `School "${slug}" deleted: ${r.people.length} people (${failed} failed), batches ${r.academy.enrollment_batches}, Quiz Studio: ${r.quiz_studio ? JSON.stringify(r.quiz_studio) : (r.quiz_studio_error || 'not configured')}.`);
+    res.redirect('/admin/users');
+  }).catch(e => { flash(req, 'error', 'School delete failed: ' + e.message); res.redirect('/admin/users'); });
 });
 router.post('/settings', (req, res) => {
   q.setSetting.run('auto_approve', req.body.auto_approve === 'on' ? '1' : '0');

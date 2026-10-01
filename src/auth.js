@@ -9,6 +9,7 @@ const router = express.Router();
 
 /* ---------- Single sign-on through AI Ninjas Accounts (on when ACCOUNTS_URL + SSO_SECRET are set) ---------- */
 const onesite = require('./onesite');
+const privacy = require('./privacy');
 const ACCOUNTS_URL = onesite.accounts.public;   // browser-facing: https://academy.aininjas.com/account in one-site mode
 const sso = ACCOUNTS_URL && process.env.SSO_SECRET
   ? require('./aininjas-sso')({ accountsUrl: ACCOUNTS_URL, apiUrl: onesite.accounts.api, appSlug: process.env.SSO_APP_SLUG || 'lms', secret: process.env.SSO_SECRET })
@@ -93,13 +94,27 @@ router.post('/api/sso/sync', express.json({ verify: (req, res, buf) => { req.raw
   if (!em) return res.status(400).json({ error: 'No user' });
   if (ev.event === 'grant.updated' && ev.grant && ev.user.status !== 'disabled') { resolveSchoolSlug(upsertFromSso({ sub: ev.user.id, email: em, name: ev.user.name, role: ev.grant.role, scope: ev.grant.scope }), ev.grant.scope); return res.json({ ok: true, applied: 'updated' }); }
   const u = q.userByEmail.get(em);
+  if (u && u.role === 'admin' && db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin' AND status='approved'").get().n <= 1) return res.json({ ok: true, applied: 'kept-last-admin' });
+  if (u && ev.event === 'user.deleted') {
+    // Accounts is erasing the person (NDPA 4.6): hard delete here and in Quiz Studio, counts back for the disposition log
+    return privacy.purgeUser(u, { by: 'accounts' }).then(purged => res.json({ ok: true, applied: 'purged', purged }))
+      .catch(e => res.status(500).json({ ok: false, error: e.message }));
+  }
   if (u) {
-    if (u.role === 'admin' && db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin' AND status='approved'").get().n <= 1) return res.json({ ok: true, applied: 'kept-last-admin' });
-    db.prepare("UPDATE users SET status='disabled' WHERE id=?").run(u.id);      // keep their progress; they just can't sign in
+    db.prepare("UPDATE users SET status='disabled' WHERE id=?").run(u.id);      // access removed: keep their progress; they just can't sign in
     db.prepare('DELETE FROM sessions WHERE sess LIKE ?').run(`%"userId":${u.id}%`);
     q.logEvent.run(u.id, null, null, 'access_revoked', JSON.stringify({ via: 'accounts' }));
   }
   res.json({ ok: true, applied: u ? 'disabled' : 'noop' });
+});
+/* A copy of everything we hold about one person, for Accounts' export (Bearer = our SSO secret). */
+router.get('/api/sso/export', (req, res) => {
+  const m = /^Bearer\s+(.+)$/.exec(req.headers.authorization || '');
+  const secret = process.env.SSO_SECRET || '';
+  if (!secret || !m || m[1].length !== secret.length || !crypto.timingSafeEqual(Buffer.from(m[1]), Buffer.from(secret))) return res.status(401).json({ error: 'unauthorized' });
+  const u = q.userByEmail.get(String(req.query.email || '').toLowerCase());
+  if (!u) return res.status(404).json({ error: 'No such user' });
+  privacy.exportUser(u).then(data => res.json(data)).catch(e => res.status(500).json({ error: e.message }));
 });
 
 // ---------- middleware ----------
@@ -147,7 +162,9 @@ function readOnlyWhileViewing(req, res, next) {
 // ---------- request access / register ----------
 router.get('/request-access', (req, res) => res.render('request-access', { title: 'Request access', values: {} }));
 
-router.post('/request-access', (req, res) => {
+const rl = require('./ratelimit');
+const loginLimit = rl.limit({ windowMs: 15 * 60 * 1000, max: 20 });        // 20 tries per IP per 15 min, per route
+router.post('/request-access', rl.limit({ windowMs: 60 * 60 * 1000, max: 10 }), (req, res) => {
   const { name, email, password, organization, note } = req.body;
   const values = { name, email, organization, note };
   const em = String(email || '').trim().toLowerCase();
@@ -169,7 +186,7 @@ router.post('/request-access', (req, res) => {
 // ---------- login ----------
 router.get('/login', (req, res) => res.render('login', { title: 'Log in', googleEnabled: !!process.env.GOOGLE_CLIENT_ID, ssoEnabled: !!sso, accountsUrl: ACCOUNTS_URL, showLocal: req.query.local === '1' || !sso }));
 
-router.post('/login', (req, res) => {
+router.post('/login', loginLimit, (req, res) => {
   const em = String(req.body.email || '').trim().toLowerCase();
   const user = q.userByEmail.get(em);
   if (!user || !user.password_hash || !bcrypt.compareSync(req.body.password || '', user.password_hash)) {
@@ -178,6 +195,7 @@ router.post('/login', (req, res) => {
   if (user.status === 'disabled' || user.status === 'rejected') {
     return res.status(403).render('login', { title: 'Log in', error: 'This account is not active. Contact info@aininjas.com.', googleEnabled: !!process.env.GOOGLE_CLIENT_ID, ssoEnabled: !!sso, accountsUrl: ACCOUNTS_URL, showLocal: true });
   }
+  rl.reset(req);
   req.session.userId = user.id;
   db.prepare("UPDATE users SET last_login_at=datetime('now') WHERE id=?").run(user.id);
   const dest = req.session.returnTo || homeFor(user);
@@ -287,4 +305,4 @@ async function syncAllFromAccounts() {
   }
   return { total: grants.length, created, updated, disabled };
 }
-module.exports = { router, currentUser, readOnlyWhileViewing, requireLogin, requireAdmin, requireStaff, homeFor, STAFF, flash, upsertFromSso, ssoEnabled: !!sso, accountsUrl: ACCOUNTS_URL, syncAllFromAccounts };
+module.exports = { router, currentUser, readOnlyWhileViewing, requireLogin, requireAdmin, requireStaff, homeFor, STAFF, flash, upsertFromSso, ssoEnabled: !!sso, accountsUrl: ACCOUNTS_URL, syncAllFromAccounts, accountsApi: sso ? (path, opts) => sso.api(path, opts) : null };

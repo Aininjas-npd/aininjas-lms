@@ -8,6 +8,7 @@ const plugins = require('./src/plugins');
 const brand = require('./src/brand');
 const onesite = require('./src/onesite');          // /assess → Quiz Studio, /account → Accounts (one site)
 const shell = require('./src/shell');
+const backup = require('./src/backup');            // nightly encrypted backup of DATA_DIR (BACKUP_* variables)
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,6 +18,7 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.set('trust proxy', 1);                       // behind nginx / Railway / Render
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1d' }));
+require('./src/fonts').mount(app, { cssPath: path.join(__dirname, 'public', 'fonts.css') });   // brand fonts served locally, not from Google
 /*
  * Health check, for Railway.
  *
@@ -33,7 +35,7 @@ app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1d' }));
 app.get('/healthz', (req, res) => {
   try {
     const n = db.prepare('SELECT COUNT(*) n FROM users').get().n;
-    res.json({ ok: true, users: n, base_path: '/', one_site: { quiz: onesite.quiz.on, accounts: onesite.accounts.on } });
+    res.json({ ok: true, users: n, base_path: '/', one_site: { quiz: onesite.quiz.on, accounts: onesite.accounts.on }, backup: backup.status() });
   } catch (e) {
     res.status(503).json({ ok: false, error: 'database unavailable' });
   }
@@ -99,6 +101,7 @@ app.use((err, req, res, next) => { console.error(err); res.status(500).render('e
 require('./src/storage').start();                // clear abandoned upload temp files; warn when the volume is nearly full
 require('./src/enrol').start();                  // scheduled enrolments: apply on their start day, end the day after their end date
 
+backup.schedule({ db, dataDir: DATA_DIR, dbFile: 'lms.sqlite', service: 'lms' });
 app.listen(PORT, () => {
   console.log(`AI Ninjas LMS running at ${process.env.BASE_URL}  (data dir: ${DATA_DIR})`);
   if (onesite.quiz.on) console.log(`  one site: ${onesite.quiz.prefix}/* → Quiz Studio at ${onesite.quiz.internal}`);
