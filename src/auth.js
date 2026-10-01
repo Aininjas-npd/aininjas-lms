@@ -163,8 +163,11 @@ function readOnlyWhileViewing(req, res, next) {
 router.get('/request-access', (req, res) => res.render('request-access', { title: 'Request access', values: {} }));
 
 const rl = require('./ratelimit');
-const loginLimit = rl.limit({ windowMs: 15 * 60 * 1000, max: 20 });        // 20 tries per IP per 15 min, per route
-router.post('/request-access', rl.limit({ windowMs: 60 * 60 * 1000, max: 10 }), (req, res) => {
+/* Two limits on password forms: a loose one per IP (a whole school shares one address, so only a script should
+   reach it) and a tight one per account (what actually stops password guessing). A successful sign-in resets both. */
+const byEmail = req => String((req.body && req.body.email) || '').trim().toLowerCase() || (req.ip || 'unknown');
+const loginLimit = [rl.limit({ windowMs: 15 * 60 * 1000, max: 100 }), rl.limit({ windowMs: 15 * 60 * 1000, max: 10, key: byEmail, message: 'Too many attempts for this account. Wait 15 minutes, or use "Forgot password".' })];
+router.post('/request-access', rl.limit({ windowMs: 60 * 60 * 1000, max: 60 }), (req, res) => {
   const { name, email, password, organization, note } = req.body;
   const values = { name, email, organization, note };
   const em = String(email || '').trim().toLowerCase();
@@ -186,7 +189,7 @@ router.post('/request-access', rl.limit({ windowMs: 60 * 60 * 1000, max: 10 }), 
 // ---------- login ----------
 router.get('/login', (req, res) => res.render('login', { title: 'Log in', googleEnabled: !!process.env.GOOGLE_CLIENT_ID, ssoEnabled: !!sso, accountsUrl: ACCOUNTS_URL, showLocal: req.query.local === '1' || !sso }));
 
-router.post('/login', loginLimit, (req, res) => {
+router.post('/login', ...loginLimit, (req, res) => {
   const em = String(req.body.email || '').trim().toLowerCase();
   const user = q.userByEmail.get(em);
   if (!user || !user.password_hash || !bcrypt.compareSync(req.body.password || '', user.password_hash)) {
@@ -195,7 +198,7 @@ router.post('/login', loginLimit, (req, res) => {
   if (user.status === 'disabled' || user.status === 'rejected') {
     return res.status(403).render('login', { title: 'Log in', error: 'This account is not active. Contact info@aininjas.com.', googleEnabled: !!process.env.GOOGLE_CLIENT_ID, ssoEnabled: !!sso, accountsUrl: ACCOUNTS_URL, showLocal: true });
   }
-  rl.reset(req);
+  rl.reset(req); rl.reset(req, byEmail);
   req.session.userId = user.id;
   db.prepare("UPDATE users SET last_login_at=datetime('now') WHERE id=?").run(user.id);
   const dest = req.session.returnTo || homeFor(user);
