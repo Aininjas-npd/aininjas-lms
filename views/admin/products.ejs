@@ -1,0 +1,43 @@
+<%- include('../partials/header') %>
+<div class="row between wrap"><h1>Products</h1><div class="row gap"><a class="btn small ghost" href="/admin/orders">Orders →</a><a class="btn small" href="#new" onclick="document.getElementById('new').open=true">+ New product</a></div></div>
+<p class="muted small">What aininjas.com sells. Edit here; each save mirrors the product and price to Stripe (a changed amount creates a new Stripe price and archives the old one). The marketing site reads <a href="<%= catalogUrl %>" target="_blank"><%= catalogUrl %></a>, so prices are typed once.
+  <% if (!stripe.configured) { %><br><span class="badge pending">Stripe not configured</span> set <code>STRIPE_SECRET_KEY</code> on this service to enable checkout; products save locally until then.<% } else { %><br><span class="badge <%= stripe.test ? 'pending' : 'active' %>"><%= stripe.test ? 'Stripe TEST mode' : 'Stripe LIVE mode' %></span> webhook secret <%= stripe.webhook ? 'set' : '<b>missing</b> (payments will not enrol anyone until STRIPE_WEBHOOK_SECRET is set)' %> · Stripe Tax <%= stripe.tax ? 'on' : 'off' %><% } %></p>
+
+<table class="table"><thead><tr><th>Product</th><th>Kind</th><th>Price</th><th>Grants</th><th>Stripe</th><th>On sale</th><th></th></tr></thead><tbody>
+<% products.forEach(p => { %>
+  <tr><td><strong><%= p.name %></strong><br><span class="muted small"><%= p.slug %> · <%= p.audience %></span><% if (p.description) { %><br><span class="small"><%= p.description %></span><% } %></td>
+    <td><%= { one_time: 'One-time', yearly: 'Yearly subscription', seat: 'Per seat / year (invoice)' }[p.kind] %><% if (p.kind === 'one_time' && p.access_days) { %><br><span class="muted small"><%= p.access_days %> days of access</span><% } %></td>
+    <td><%= p.display %><% if (p.kind === 'yearly') { %> / yr<% } %></td>
+    <td class="small"><% if (p.all_courses) { %>every published course (<%= p.courseTitles.length %>)<% } else { %><%= p.courseTitles.join(', ') || '—' %><% } %></td>
+    <td class="small"><% if (p.kind === 'seat') { %><span class="muted">invoiced, no Stripe price</span><% } else if (p.stripe_price_id) { %><code><%= p.stripe_price_id %></code><% } else { %><span class="badge pending">not synced</span> <form method="post" action="/admin/products/<%= p.id %>/sync" class="inline"><button class="link small">sync now</button></form><% } %></td>
+    <td><form method="post" action="/admin/products/<%= p.id %>/toggle" class="inline"><button class="link"><span class="badge <%= p.on_sale ? 'active' : '' %>"><%= p.on_sale ? 'on sale' : 'off sale' %></span></button></form></td>
+    <td class="actions"><a class="btn small ghost" href="/admin/products?edit=<%= p.id %>#new">✎ Edit</a><% if (p.on_sale && p.kind !== 'seat') { %><a class="btn small ghost" href="/buy/<%= p.slug %>" target="_blank" title="Open the real checkout for this product (use a Stripe test card in test mode)">Try checkout</a><% } %></td></tr>
+<% }) %>
+<% if (!products.length) { %><tr><td colspan="7" class="muted">No products yet. Create the first one below.</td></tr><% } %>
+</tbody></table>
+<% if (stripe.configured) { %><form method="post" action="/admin/products/import-stripe" class="inline" style="margin-top:8px"><button class="link small" title="If a price was changed in the Stripe dashboard, pull it back here">Import prices from Stripe</button></form><% } %>
+
+<details id="new" class="card" style="margin-top:18px" <%= edit ? 'open' : '' %>><summary style="cursor:pointer;font-weight:700"><%= edit ? 'Edit ' + edit.name : 'New product' %></summary>
+  <form method="post" action="/admin/products">
+    <% if (edit) { %><input type="hidden" name="id" value="<%= edit.id %>"><% } %>
+    <div class="row gap wrap">
+      <label style="flex:1">Name<input type="text" name="name" required value="<%= edit ? edit.name : '' %>" placeholder="e.g. Python for AI"></label>
+      <label style="flex:1">Slug <span class="muted">(in the Buy link)</span><input type="text" name="slug" required pattern="[a-z0-9][a-z0-9-]{1,59}" value="<%= edit ? edit.slug : '' %>" placeholder="python-for-ai"></label>
+    </div>
+    <label>Description <span class="muted">(shown on aininjas.com)</span><textarea name="description" rows="2"><%= edit ? (edit.description || '') : '' %></textarea></label>
+    <div class="row gap wrap">
+      <label>Kind<select name="kind"><option value="one_time" <%= edit && edit.kind === 'one_time' ? 'selected' : '' %>>One-time purchase</option><option value="yearly" <%= edit && edit.kind === 'yearly' ? 'selected' : '' %>>Yearly subscription</option><option value="seat" <%= edit && edit.kind === 'seat' ? 'selected' : '' %>>School seat, per year (invoiced)</option></select></label>
+      <label>Audience<select name="audience"><option value="individual" <%= edit && edit.audience === 'individual' ? 'selected' : '' %>>Individual / parent</option><option value="school" <%= edit && edit.audience === 'school' ? 'selected' : '' %>>School</option></select></label>
+      <label>Price (USD)<input type="text" name="amount" inputmode="decimal" required value="<%= edit ? (edit.amount_cents / 100).toFixed(2) : '' %>" placeholder="49.00" style="width:120px"></label>
+      <label>Access days <span class="muted">(one-time only; blank = no end)</span><input type="number" name="access_days" min="1" value="<%= edit && edit.access_days ? edit.access_days : '' %>" style="width:120px"></label>
+      <label>Sort<input type="number" name="sort" value="<%= edit ? edit.sort : 100 %>" style="width:90px"></label>
+    </div>
+    <fieldset style="margin-top:10px"><legend>Grants access to</legend>
+      <label class="check"><input type="checkbox" name="all_courses" <%= edit && edit.all_courses ? 'checked' : '' %>> Every published course (the full curriculum, including courses added later)</label>
+      <div class="row gap wrap" style="margin-top:6px"><% courses.forEach(c => { %><label class="check"><input type="checkbox" name="course_ids" value="<%= c.id %>" <%= edit && edit.course_ids.includes(c.id) ? 'checked' : '' %>> <%= c.title %><%= c.is_published ? '' : ' (closed)' %></label><% }) %></div>
+    </fieldset>
+    <label class="check" style="margin-top:8px"><input type="checkbox" name="on_sale" <%= !edit || edit.on_sale ? 'checked' : '' %>> On sale (listed in the catalog and purchasable)</label>
+    <p><button class="btn"><%= edit ? 'Save changes' : 'Create product' %></button> <% if (edit) { %><a class="btn ghost" href="/admin/products">Cancel</a><% } %></p>
+  </form>
+</details>
+<%- include('../partials/footer') %>

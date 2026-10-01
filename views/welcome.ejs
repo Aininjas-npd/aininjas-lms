@@ -1,0 +1,25 @@
+<%- include('partials/header') %>
+<div class="card auth" style="text-align:center;max-width:640px">
+<% if (state === 'paid') { %>
+  <h1>🥷 Welcome to AI Ninjas<%= buyer ? ', ' + buyer.name.split(' ')[0] : '' %>!</h1>
+  <p>Your payment went through and <strong><%= product ? product.name : 'your course' %></strong> is unlocked<%= product && product.kind === 'yearly' ? ' for the next year' : '' %>. A receipt is on its way from Stripe.</p>
+  <% if (signedIn) { %>
+    <p><a class="btn btn-p" href="/dashboard">Go to my courses →</a></p>
+  <% } else if (newAccount) { %>
+    <p>We've created your AI Ninjas account for <strong><%= buyer ? buyer.email : '' %></strong>. Check that inbox for an email from AI Ninjas with a link to <strong>set your password</strong> (look in spam if it hasn't arrived in a few minutes), then sign in here.</p>
+    <p><% if (ssoEnabled) { %><a class="btn btn-p" href="/auth/sso?return=/dashboard">Sign in</a><% } else { %><a class="btn btn-p" href="/login">Sign in</a><% } %></p>
+    <p class="muted small">Buying for your child? Sign in once to set things up; they can use the same login, or write to <a href="mailto:info@aininjas.com">info@aininjas.com</a> and we'll add a separate learner account.</p>
+  <% } else { %>
+    <p>The course is on the account for <strong><%= buyer ? buyer.email : '' %></strong>. Sign in to start.</p>
+    <p><% if (ssoEnabled) { %><a class="btn btn-p" href="/auth/sso?return=/dashboard">Sign in</a><% } else { %><a class="btn btn-p" href="/login">Sign in</a><% } %></p>
+  <% } %>
+<% } else if (state === 'pending') { %>
+  <h1>⏳ Confirming your payment…</h1>
+  <p>Stripe is still confirming the payment. This page will refresh in a few seconds; if it stays here for more than a minute, your bank may be holding the payment — the course unlocks automatically as soon as Stripe confirms, and you'll get the receipt by email.</p>
+  <meta http-equiv="refresh" content="5">
+<% } else { %>
+  <h1>Hmm, we couldn't find that purchase</h1>
+  <p class="muted">If you just paid, give it a minute and check your email for the receipt and the sign-in link. Otherwise write to <a href="mailto:info@aininjas.com">info@aininjas.com</a> with the email address you used.</p>
+<% } %>
+</div>
+<%- include('partials/footer') %>

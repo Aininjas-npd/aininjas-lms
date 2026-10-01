@@ -21,7 +21,7 @@ const ROLES = ['admin', 'school_admin', 'teacher', 'learner'];
 const STAFF = ['admin', 'school_admin', 'teacher'];
 function upsertFromSso({ sub, email, name, role, scope }) {
   const em = String(email).toLowerCase();
-  const r = ROLES.includes(role) ? role : 'learner';
+  const r = ROLES.includes(role) ? role : 'learner';   // 'individual' (a buyer without a school) and anything unknown → learner
   const slug = scope && /^[a-z0-9][a-z0-9-]{1,39}$/.test(scope.school_slug || '') ? scope.school_slug : null;   // school co-branding
   const scopeClasses = Array.isArray(scope && scope.classes) ? scope.classes.filter(Boolean) : [];
   const classes = JSON.stringify(r === 'teacher' ? scopeClasses : []);

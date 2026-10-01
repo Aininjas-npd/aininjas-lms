@@ -231,3 +231,20 @@ Attachments follow the step's audience: files on a teachers-only step cannot be 
   Academy's Admin → Users → *export data* for the Academy/Quiz Studio part alone.
 - **Erase a school**: Academy → Admin → Users → filter by school → *Delete all data for …* (every member via
   Accounts, batches and course links, then the school's record and results in Quiz Studio).
+
+## Selling courses (eCommerce, Phase 1)
+
+- **Products** (Admin → Products): what aininjas.com sells — slug, price, one-time / yearly / school seat, and which
+  courses it grants. Saving mirrors the product and price to Stripe (`STRIPE_SECRET_KEY`); a changed amount creates a
+  new Stripe price and archives the old one. Stripe is the record of money, the Academy is the record of what a
+  product grants. `GET /api/catalog` publishes the on-sale products with prices.
+- **Buy flow**: `GET /buy/<slug>` creates a Stripe Checkout Session and redirects; Stripe calls
+  `POST /api/stripe/webhook` (`STRIPE_WEBHOOK_SECRET`) on `checkout.session.completed`, which records the order,
+  creates the buyer's account through Accounts (role *Individual learner*, invitation email) when new, and enrols the
+  product's courses; `/welcome` is the success page (it also confirms with Stripe if the webhook is late).
+  Renewals (`invoice.paid`) extend yearly access; `customer.subscription.deleted` and full `charge.refunded` end the
+  enrolments (progress kept) and mark the order lapsed/refunded. Admin → Orders lists everything with Stripe links.
+- **Marketing site**: one tag, `<script src="https://academy.aininjas.com/embed/catalog.js" async></script>`, fills
+  `data-aininjas-price="<slug>"` spans and `data-aininjas-buy="<slug>"` links from the catalog (see the file's header).
+- Test mode: use `sk_test_…` keys on staging and Stripe's test card 4242 4242 4242 4242. `STRIPE_API_BASE` points the
+  SDK at a local fake for automated tests.

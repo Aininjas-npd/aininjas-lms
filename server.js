@@ -86,6 +86,9 @@ plugins.load(app, {
 });
 
 app.use(auth.router);
+const commerceRoutes = require('./src/routes/commerce');   // catalog, buy, welcome, Stripe webhook; admin products + orders
+require('./src/commerce').setAccountsApi(auth.accountsApi);
+app.use(commerceRoutes.publicRouter);
 app.use(require('./src/routes/learner'));
 app.use(require('./src/routes/assign'));    // assignments + gradebook (staff) and the student due list (before classes: /classes/:name/assignments)
 app.use(require('./src/routes/enrol'));     // bulk + scheduled enrolment, course availability (before classes: /classes/enrolments beats /classes/:name)
@@ -93,6 +96,7 @@ app.use(require('./src/routes/teach'));     // before classes: /classes/:name/te
 app.use(require('./src/routes/classcurriculum'));   // likewise /classes/:name/curriculum
 app.use(require('./src/routes/classes'));   // teacher / school-admin class views + student class picker
 app.use('/admin', require('./src/routes/curriculum'));   // before admin: /admin/curricula/:id beats admin's own patterns
+app.use('/admin', commerceRoutes.adminRouter);          // /admin/products, /admin/orders
 app.use('/admin', require('./src/routes/admin'));
 
 app.use((req, res) => res.status(404).render('error', { title: 'Not found', message: 'Page not found.' }));
