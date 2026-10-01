@@ -5,6 +5,7 @@ const { db, q } = require('../db');
 const commerce = require('../commerce');
 const { flash, requireAdmin } = require('../auth');
 const onesite = require('../onesite');
+const { refFromRequest } = require('./partners');
 
 const pub = express.Router();
 
@@ -16,13 +17,13 @@ pub.get('/api/catalog', (req, res) => {
 });
 
 /* Buy: create the Checkout Session and send the buyer to Stripe. A signed-in buyer's email is prefilled; a partner
-   reference from ?ref= (or the Phase 2 cookie) rides along in metadata. */
+   reference from ?ref= (or the /p/<CODE> cookie) rides along in metadata; src/partners.js decides attribution on payment. */
 pub.get('/buy/:slug', async (req, res) => {
   const p = commerce.productBySlug(req.params.slug);
   if (!p || !p.on_sale || p.kind === 'seat') return res.status(404).render('error', { title: 'Not for sale', message: 'This product is not available for purchase online. See aininjas.com for current courses, or write to info@aininjas.com.' });
   if (!commerce.configured()) return res.status(503).render('error', { title: 'Checkout not available', message: 'Online purchase is not open yet. Write to info@aininjas.com and we will enrol you.' });
   try {
-    const partnerRef = String(req.query.ref || (req.cookies && req.cookies.partner_ref) || '').slice(0, 40) || null;
+    const partnerRef = refFromRequest(req);   // ?ref= or the /p/<CODE> cookie (Phase 2)
     const session = await commerce.createCheckout({ product: p, user: req.user && req.user.status === 'approved' ? req.user : null, partnerRef });
     q.logEvent.run(req.user ? req.user.id : null, null, null, 'checkout_started', JSON.stringify({ product: p.slug, session: session.id }));
     res.redirect(303, session.url);

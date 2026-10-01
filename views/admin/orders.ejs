@@ -1,20 +1,21 @@
 <%- include('../partials/header') %>
-<div class="row between wrap"><h1>Orders</h1><a class="btn small ghost" href="/admin/products">Products →</a></div>
+<div class="row between wrap"><h1>Orders</h1><div class="row gap"><a class="btn small ghost" href="/admin/products">Products →</a><a class="btn small ghost" href="/admin/partners">Partners →</a></div></div>
 <p class="muted small"><% totals.forEach(t => { %><span class="badge <%= t.status === 'paid' ? 'active' : (t.status === 'pending' ? 'pending' : '') %>"><%= t.status %></span> <%= t.n %> · <%= money(t.cents, 'usd') %> &nbsp; <% }) %><% if (!totals.length) { %>No orders yet.<% } %> · Refunds are issued in the <a href="<%= stripeDash %>/payments" target="_blank">Stripe dashboard</a>; the webhook revokes the enrolment here.</p>
 <form class="row gap wrap" method="get" style="margin-bottom:10px">
   <select name="status" onchange="this.form.submit()"><option value="">Any status</option><% ['paid','pending','refunded','lapsed'].forEach(s => { %><option value="<%= s %>" <%= status === s ? 'selected' : '' %>><%= s %></option><% }) %></select>
   <input type="search" name="q" value="<%= qtext %>" placeholder="email, name, product or session id"><button class="btn small">Search</button>
 </form>
-<table class="table"><thead><tr><th>#</th><th>When</th><th>Buyer</th><th>Product</th><th>Amount</th><th>Status</th><th>Stripe</th><th></th></tr></thead><tbody>
+<table class="table"><thead><tr><th>#</th><th>When</th><th>Buyer</th><th>Product</th><th>Amount</th><th>Partner</th><th>Status</th><th>Stripe</th><th></th></tr></thead><tbody>
 <% orders.forEach(o => { %>
   <tr><td><%= o.id %></td><td class="small"><%= (o.paid_at || o.created_at).slice(0, 16) %></td>
     <td><% if (o.user_id) { %><a href="/students/<%= o.user_id %>"><%= o.user_name || o.buyer_name || o.buyer_email %></a><% } else { %><%= o.buyer_name || o.buyer_email || '—' %><% } %><br><span class="muted small"><%= o.buyer_email || '' %></span></td>
-    <td><%= o.product_name || o.product_slug %><br><span class="muted small"><%= o.kind %><%= o.attribution ? ' · ' + o.attribution : '' %></span></td>
+    <td><%= o.product_name || o.product_slug %><br><span class="muted small"><%= o.kind %></span></td>
     <td><%= o.display %></td>
+    <td class="small"><% if (o.partner_id) { %><a href="/admin/partners/<%= o.partner_id %>"><%= o.partner_name || o.partner_code %></a><br><span class="muted"><%= o.attribution %></span><% } else { %><span class="muted"><%= o.attribution || (o.status === 'pending' ? '' : 'house') %></span><% } %></td>
     <td><span class="badge <%= o.status === 'paid' ? 'active' : (o.status === 'pending' ? 'pending' : '') %>"><%= o.status %></span><% if (o.refunded_at) { %><br><span class="muted small">refunded <%= o.refunded_at.slice(0, 10) %></span><% } %><% if (o.lapsed_at) { %><br><span class="muted small">lapsed <%= o.lapsed_at.slice(0, 10) %></span><% } %></td>
     <td class="small"><% if (o.stripe_payment_intent) { %><a href="<%= stripeDash %>/payments/<%= o.stripe_payment_intent %>" target="_blank">payment</a><% } %><% if (o.stripe_subscription_id) { %> <a href="<%= stripeDash %>/subscriptions/<%= o.stripe_subscription_id %>" target="_blank">subscription</a><% } %><% if (o.stripe_invoice_id) { %> <a href="<%= stripeDash %>/invoices/<%= o.stripe_invoice_id %>" target="_blank">invoice</a><% } %></td>
     <td class="actions"><% if (o.status === 'paid') { %><form method="post" action="/admin/orders/<%= o.id %>/re-enrol" class="inline"><button class="link small" title="Grant the order's courses again (e.g. after a course was replaced)">re-enrol</button></form><% } %></td></tr>
 <% }) %>
-<% if (!orders.length) { %><tr><td colspan="8" class="muted">No orders match.</td></tr><% } %>
+<% if (!orders.length) { %><tr><td colspan="9" class="muted">No orders match.</td></tr><% } %>
 </tbody></table>
 <%- include('../partials/footer') %>

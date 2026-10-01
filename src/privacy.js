@@ -39,6 +39,7 @@ function purgeLocal(user) {
     c.sco_progress = db.prepare('SELECT COUNT(*) n FROM sco_progress WHERE user_id=?').get(user.id).n;
     if (tableExists('step_progress')) c.step_progress = db.prepare('SELECT COUNT(*) n FROM step_progress WHERE user_id=?').get(user.id).n;
     if (tableExists('assignment_submissions')) c.assignment_submissions = db.prepare('SELECT COUNT(*) n FROM assignment_submissions WHERE user_id=?').get(user.id).n;
+    if (tableExists('orders')) c.orders_anonymised = require('./partners').anonymiseOrders(user.id, user.email);   // financial record kept, identity removed
     c.users = del('DELETE FROM users WHERE id=?', user.id);   // ON DELETE CASCADE: enrollments, sco_progress, step_progress, submissions, grades
     return c;
   })();

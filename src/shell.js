@@ -21,6 +21,7 @@ function navFor(user, path = '', pluginNav = [], viewing = false) {
     items.push({ href: '/admin/curricula', label: 'Curricula', on: on(p => p.startsWith('/admin/curricula')) });
     items.push({ href: '/admin/users', label: 'Users', on: on(p => p.startsWith('/admin/users')) });
     items.push({ href: '/admin/orders', label: 'Orders', on: on(p => p.startsWith('/admin/orders') || p.startsWith('/admin/products')) });
+    items.push({ href: '/admin/partners', label: 'Partners', on: on(p => p.startsWith('/admin/partners') || p.startsWith('/admin/commissions')) });
     items.push({ href: '/admin', label: 'Activity', on: on(p => p === '/admin' || p === '/admin/') });
   }
   return items;

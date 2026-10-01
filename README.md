@@ -248,3 +248,23 @@ Attachments follow the step's audience: files on a teachers-only step cannot be 
   `data-aininjas-price="<slug>"` spans and `data-aininjas-buy="<slug>"` links from the catalog (see the file's header).
 - Test mode: use `sk_test_…` keys on staging and Stripe's test card 4242 4242 4242 4242. `STRIPE_API_BASE` points the
   SDK at a local fake for automated tests.
+
+## Partners (Phase 2)
+
+- **Partners** (Admin → Partners): affiliates and business-development agents, each with a code (e.g. `AHMED20`),
+  commission rates (first payment %, renewal % for N months) and an optional buyer discount. A discount creates a
+  Stripe coupon + promotion code equal to the partner code, valid for the first payment; pausing the partner
+  deactivates it.
+- **How a sale is credited**, decided once when the order is paid and locked on the order (`orders.partner_id`,
+  `attribution`, `attributed_at`): a **registered deal** (the partner's page: "this buyer / email domain / school is
+  mine", expires after `PARTNER_DEAL_DAYS`) beats the **coupon code** typed at checkout, which beats the **link**
+  `/p/<CODE>` (sets a `partner_ref` cookie for `PARTNER_LINK_DAYS`, forwards to `MAIN_SITE_URL/?ref=CODE`, where
+  `embed/catalog.js` keeps the ref for its Buy links; `?to=<product-slug>` goes straight to checkout). Anything else
+  is a **house** sale. A partner's own purchases and paused partners are house sales. The buyer's first partner is
+  kept on `users.partner_id` only so renewals keep crediting them; nothing partner-related is shown to learners.
+- **Commissions** (Admin → Commissions): one row per credited paid order, rate × what the buyer paid, grouped per
+  partner per month; pending → approved → paid (payout itself is outside the Academy for now), CSV export. A full
+  refund within `PARTNER_CLAWBACK_DAYS` reverses the row (a negative row if it was already paid); renewals earn the
+  renewal rate until `renewal_months` after the first sale.
+- Deleting a user (Accounts → Delete everywhere) keeps their orders as financial records but strips the name, email
+  and user link from them.

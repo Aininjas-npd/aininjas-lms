@@ -45,7 +45,7 @@ const Database = require('better-sqlite3');
   const buyer = db.prepare("SELECT * FROM users WHERE email='parent@test.local'").get();
   ok('buyer account created and approved', buyer && buyer.status === 'approved' && buyer.role === 'learner');
   ok('buyer enrolled in the course, tagged to the order', db.prepare("SELECT status, order_id, source FROM enrollments WHERE user_id=?").get(buyer.id).status === 'active' && db.prepare("SELECT order_id FROM enrollments WHERE user_id=?").get(buyer.id).order_id === 1);
-  ok('partner ref kept on the order for Phase 2', JSON.parse(db.prepare('SELECT metadata FROM orders WHERE id=1').get().metadata).partner_ref === 'ahmed');
+  ok('partner ref kept on the order for Phase 2', JSON.parse(db.prepare('SELECT metadata FROM orders WHERE id=1').get().metadata).partner_ref === 'AHMED');   // codes are upper-cased
   h = await hook({ id: 'evt_1', type: 'checkout.session.completed', data: { object: sess } });
   ok('replayed event is a duplicate, not a second enrolment', /duplicate/.test(h.body.result) && db.prepare('SELECT COUNT(*) n FROM enrollments WHERE user_id=?').get(buyer.id).n === 1);
   r = await call('/api/stripe/webhook', { method: 'POST', headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=bad' }, body: '{}' });

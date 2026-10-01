@@ -7,7 +7,8 @@
    - The Academy is the system of record for what a product GRANTS: the `products` table maps a slug to course ids and
      carries the display copy. Admin → Products is the one place to edit; saving pushes to Stripe through the API.
    - `orders` records what was bought by whom (Stripe session/invoice ids, amount, status, buyer), `order_items` which
-     courses it granted. Partner attribution columns are already here for Phase 2.
+     courses it granted. Partner attribution (partner_id, attribution, attributed_at) is decided by src/partners.js
+     when the order is paid; commissions live there too.
    - `stripe_events` makes the webhook idempotent: Stripe retries, we process each event id once.
 
    Buyer flow: www.aininjas.com (prices from /api/catalog) → GET /buy/<slug> → Stripe Checkout → webhook
@@ -89,6 +90,7 @@ const ucols = db.prepare('PRAGMA table_info(users)').all().map(c => c.name);
 if (!ucols.includes('partner_id')) db.exec('ALTER TABLE users ADD COLUMN partner_id INTEGER');        // Phase 2
 if (!ucols.includes('attributed_at')) db.exec('ALTER TABLE users ADD COLUMN attributed_at TEXT');     // Phase 2
 if (!ucols.includes('stripe_customer_id')) db.exec('ALTER TABLE users ADD COLUMN stripe_customer_id TEXT');
+const partners = require('./partners');   // Phase 2: attribution + commissions (needs the orders table above)
 
 /* ---------- Stripe client (lazy: the app runs without keys, checkout just says "not available") ---------- */
 let _stripe = null;
@@ -101,6 +103,7 @@ function stripe() {
   _stripe = require('stripe')(key, opts);
   return _stripe;
 }
+partners.setStripe(stripe);
 const configured = () => !!process.env.STRIPE_SECRET_KEY;
 const testMode = () => /^sk_test_|^rk_test_/.test(process.env.STRIPE_SECRET_KEY || '');
 
@@ -249,7 +252,7 @@ async function buyerUser({ academyUserId, email, name }) {
 }
 
 /** Mark an order paid and enrol the buyer in the product's courses. Idempotent per order. */
-async function fulfil(order, { session, invoice, subscription, customerId, paymentIntent } = {}) {
+async function fulfil(order, { session, invoice, subscription, customerId, paymentIntent, renewalOf } = {}) {
   const p = productById(order.product_id) || productBySlug(order.product_slug);
   if (!p) throw new Error('Order ' + order.id + ' has no product');
   const email = (session && (session.customer_details && session.customer_details.email || session.customer_email)) || order.buyer_email;
@@ -272,8 +275,15 @@ async function fulfil(order, { session, invoice, subscription, customerId, payme
       q.logEvent.run(user.id, courseId, null, 'purchase_enrol', JSON.stringify({ order_id: order.id, result }));
     }
   })();
-  plugins.emit('order:paid', { orderId: order.id, userId: user.id, productSlug: p.slug, courseIds: courses, created });
-  return { user, created, invite, courses };
+  // Phase 2: who gets credit (locked once per order), then the commission row
+  let attribution = null, commission = null;
+  try {
+    if (renewalOf) { if (!order.attributed_at) db.prepare("UPDATE orders SET attributed_at=datetime('now') WHERE id=?").run(order.id); attribution = { source: 'renewal', partner: order.partner_id ? partners.partnerById(order.partner_id) : null }; }
+    else attribution = partners.attribute(order, { session, buyerEmail: email, user });
+    commission = partners.bookCommission(order, { renewalOf });
+  } catch (e) { console.error('[partners] attribution failed for order ' + order.id + ': ' + e.message); }
+  plugins.emit('order:paid', { orderId: order.id, userId: user.id, productSlug: p.slug, courseIds: courses, created, partnerId: attribution && attribution.partner ? attribution.partner.id : null });
+  return { user, created, invite, courses, attribution, commission };
 }
 
 /** Refund or lapse: enrolments granted by the order end (progress kept); order status updated. */
@@ -286,6 +296,7 @@ function revoke(order, status, reason) {
     }
     db.prepare(`UPDATE orders SET status=?, ${status === 'refunded' ? 'refunded_at' : 'lapsed_at'}=datetime('now') WHERE id=?`).run(status, order.id);
   })();
+  if (status === 'refunded') { try { partners.clawback(order, reason); } catch (e) { console.error('[partners] clawback failed: ' + e.message); } }
   plugins.emit('order:' + status, { orderId: order.id, userId: order.user_id, reason });
 }
 
@@ -324,7 +335,7 @@ async function processEvent(event, s) {
       if (order.status === 'paid') return 'already fulfilled';
       const subscription = obj.subscription ? await s.subscriptions.retrieve(typeof obj.subscription === 'string' ? obj.subscription : obj.subscription.id) : null;
       const r = await fulfil(order, { session: obj, subscription, customerId: typeof obj.customer === 'string' ? obj.customer : (obj.customer && obj.customer.id), paymentIntent: typeof obj.payment_intent === 'string' ? obj.payment_intent : null, invoice: obj.invoice ? { id: typeof obj.invoice === 'string' ? obj.invoice : obj.invoice.id } : null });
-      return `fulfilled order ${order.id}: user ${r.user.id}${r.created ? ' (new account)' : ''}, ${r.courses.length} course(s)`;
+      return `fulfilled order ${order.id}: user ${r.user.id}${r.created ? ' (new account)' : ''}, ${r.courses.length} course(s)` + (r.attribution ? `, ${r.attribution.source}${r.attribution.partner ? ' ' + r.attribution.partner.code : ''}` : '');
     }
     case 'invoice.paid': {
       // renewals of a yearly subscription (the first invoice is handled by checkout.session.completed)
@@ -336,9 +347,9 @@ async function processEvent(event, s) {
       if (prev.stripe_invoice_id === null) { db.prepare('UPDATE orders SET stripe_invoice_id=? WHERE id=?').run(obj.id, prev.id); return 'first invoice linked to order ' + prev.id; }
       const subscription = await s.subscriptions.retrieve(subId);
       const id = db.prepare(`INSERT INTO orders (product_id, product_slug, user_id, buyer_email, kind, amount_cents, currency, status, stripe_customer_id, stripe_subscription_id, stripe_invoice_id, partner_id, attribution, metadata) VALUES (?, ?, ?, ?, 'yearly', ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`)
-        .run(prev.product_id, prev.product_slug, prev.user_id, prev.buyer_email, obj.amount_paid || prev.amount_cents, obj.currency || prev.currency, prev.stripe_customer_id, subId, obj.id, prev.partner_id, prev.attribution ? 'renewal' : null, JSON.stringify({ renewal_of: prev.id })).lastInsertRowid;
+        .run(prev.product_id, prev.product_slug, prev.user_id, prev.buyer_email, obj.amount_paid || prev.amount_cents, obj.currency || prev.currency, prev.stripe_customer_id, subId, obj.id, prev.partner_id, prev.partner_id ? 'renewal' : 'house', JSON.stringify({ renewal_of: prev.id })).lastInsertRowid;
       const order = db.prepare('SELECT * FROM orders WHERE id=?').get(id);
-      const r = await fulfil(order, { subscription, invoice: obj, customerId: prev.stripe_customer_id });
+      const r = await fulfil(order, { subscription, invoice: obj, customerId: prev.stripe_customer_id, renewalOf: prev.id });
       return `renewal order ${order.id}: user ${r.user.id}, access to ${subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString().slice(0, 10) : '?'}`;
     }
     case 'customer.subscription.deleted': {
@@ -364,11 +375,12 @@ async function processEvent(event, s) {
 }
 
 /* ---------- admin helpers ---------- */
-function listOrders({ status, q: text, limit = 200 } = {}) {
+function listOrders({ status, q: text, partnerId, limit = 200 } = {}) {
   const where = [], args = [];
+  if (partnerId) { where.push('o.partner_id=?'); args.push(partnerId); }
   if (status) { where.push('o.status=?'); args.push(status); }
   if (text) { where.push('(o.buyer_email LIKE ? OR o.buyer_name LIKE ? OR o.product_slug LIKE ? OR o.stripe_session_id LIKE ?)'); args.push(`%${text}%`, `%${text}%`, `%${text}%`, `%${text}%`); }
-  return db.prepare(`SELECT o.*, p.name AS product_name, u.name AS user_name FROM orders o LEFT JOIN products p ON p.id=o.product_id LEFT JOIN users u ON u.id=o.user_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY o.id DESC LIMIT ?`).all(...args, limit);
+  return db.prepare(`SELECT o.*, p.name AS product_name, u.name AS user_name, pa.name AS partner_name, pa.code AS partner_code FROM orders o LEFT JOIN products p ON p.id=o.product_id LEFT JOIN users u ON u.id=o.user_id LEFT JOIN partners pa ON pa.id=o.partner_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY o.id DESC LIMIT ?`).all(...args, limit);
 }
 const orderById = id => db.prepare('SELECT * FROM orders WHERE id=?').get(id);
 
