@@ -90,7 +90,8 @@ const ucols = db.prepare('PRAGMA table_info(users)').all().map(c => c.name);
 if (!ucols.includes('partner_id')) db.exec('ALTER TABLE users ADD COLUMN partner_id INTEGER');        // Phase 2
 if (!ucols.includes('attributed_at')) db.exec('ALTER TABLE users ADD COLUMN attributed_at TEXT');     // Phase 2
 if (!ucols.includes('stripe_customer_id')) db.exec('ALTER TABLE users ADD COLUMN stripe_customer_id TEXT');
-const partners = require('./partners');   // Phase 2: attribution + commissions (needs the orders table above)
+const partners = require('./partners');   // Phase 2: attribution + commissions
+partners.ensureOrderColumns();
 
 /* ---------- Stripe client (lazy: the app runs without keys, checkout just says "not available") ---------- */
 let _stripe = null;
@@ -230,7 +231,7 @@ async function createCheckout({ product: p, user, partnerRef, promoCode }) {
 
 /* ---------- fulfilment ---------- */
 let accountsApi = null;   // set by server.js: (path, opts) => sso.api(...)
-function setAccountsApi(fn) { accountsApi = fn; }
+function setAccountsApi(fn) { accountsApi = fn; partners.setAccountsApi(fn); }
 
 /** The Academy user for a buyer: by id from metadata, else by email, else created through Accounts (which syncs the
     grant back here and emails the invitation) or locally when SSO is off. */

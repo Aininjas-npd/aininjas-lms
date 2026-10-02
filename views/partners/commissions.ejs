@@ -1,0 +1,18 @@
+<%- include('../partials/header') %>
+<h1>Your commissions</h1>
+<p class="small">Earned <strong><%= money(stats.earned, 'usd') %></strong> · owed to you <strong><%= money(stats.owed, 'usd') %></strong> · paid <strong><%= money(stats.paid, 'usd') %></strong><br><span class="muted">pending = waiting for the <%= clawbackDays %>-day refund window · approved = on the next statement · paid = paid out · reversed = the buyer was refunded in time</span></p>
+
+<div class="card"><h2>Statements</h2>
+  <table class="table"><thead><tr><th>Month</th><th>Amount</th><th>Issued</th><th>Status</th><th></th></tr></thead><tbody>
+  <% statements.forEach(s => { %><tr><td><%= s.period %></td><td><strong><%= s.display %></strong></td><td class="small"><%= s.issued_at.slice(0, 10) %></td><td><span class="badge <%= s.status === 'paid' ? 'active' : 'pending' %>"><%= s.status %></span><% if (s.paid_at) { %> <span class="muted small"><%= s.paid_at.slice(0, 10) %><%= s.reference ? ' · ref ' + s.reference : '' %></span><% } %></td><td class="actions"><a class="btn small ghost" href="/partners/statements/<%= s.id %>">View</a> <a class="btn small ghost" href="/partners/statements/<%= s.id %>?format=csv">CSV</a></td></tr><% }) %>
+  <% if (!statements.length) { %><tr><td colspan="5" class="muted">No statements yet — they are issued monthly once commissions are approved.</td></tr><% } %>
+  </tbody></table>
+</div>
+
+<div class="card"><h2>All commissions</h2>
+  <table class="table"><thead><tr><th>Month</th><th>Order</th><th>Kind</th><th>Basis</th><th>Rate</th><th>Amount</th><th>Status</th></tr></thead><tbody>
+  <% rows.forEach(c => { %><tr><td><%= c.period %></td><td class="small">#<%= c.order_id %> <%= c.product_slug || '' %></td><td><%= c.kind %></td><td><%= money(c.basis_cents, c.currency) %></td><td><%= c.rate %>%</td><td><strong><%= c.display %></strong></td><td><span class="badge <%= c.status === 'paid' ? 'active' : (c.status === 'reversed' ? 'disabled' : 'pending') %>"><%= c.status %></span></td></tr><% }) %>
+  <% if (!rows.length) { %><tr><td colspan="7" class="muted">Nothing yet.</td></tr><% } %>
+  </tbody></table>
+</div>
+<%- include('../partials/footer') %>

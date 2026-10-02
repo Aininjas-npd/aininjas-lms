@@ -1,0 +1,12 @@
+<%- include('../partials/header') %>
+<div class="row between wrap"><h1>Commission statement <%= py.period %></h1><div class="row gap"><a class="btn small ghost" href="<%= adminView ? '/admin/payouts' : '/partners/commissions' %>">← Back</a><a class="btn small ghost" href="?format=csv">CSV</a><button class="btn small ghost" type="button" onclick="window.print()">Print / PDF</button></div></div>
+<div class="card">
+  <p class="small"><strong><%= company %></strong> → <strong><%= py.partner_name %></strong> (<%= py.partner_code %>, <%= py.partner_type === 'agent' ? 'BD agent' : 'affiliate' %>)<% if (adminView && py.partner_email) { %> · <%= py.partner_email %><% } %><br>Statement #<%= py.id %> · issued <%= py.issued_at.slice(0, 10) %> · <span class="badge <%= py.status === 'paid' ? 'active' : 'pending' %>"><%= py.status %></span><% if (py.paid_at) { %> on <%= py.paid_at.slice(0, 10) %><%= py.reference ? ', reference ' + py.reference : '' %><% } %></p>
+  <% if (adminView && py.payout_details) { %><p class="small muted">Payout details given by the partner: <%= py.payout_details %></p><% } %>
+  <table class="table"><thead><tr><th>Order</th><th>Date</th><th>Kind</th><th>Basis</th><th>Rate</th><th>Commission</th></tr></thead><tbody>
+  <% lines.forEach(l => { %><tr><td>#<%= l.order_id %> <span class="muted small"><%= l.product_slug || '' %></span></td><td class="small"><%= (l.order_paid_at || l.created_at).slice(0, 10) %></td><td><%= l.kind %></td><td><%= money(l.basis_cents, l.currency) %></td><td><%= l.rate %>%</td><td><%= l.display %></td></tr><% }) %>
+  <tr><td colspan="5" style="text-align:right"><strong>Total</strong></td><td><strong><%= py.display %></strong></td></tr>
+  </tbody></table>
+  <p class="muted small">Commissions are calculated on the amount the buyer paid after any discount. Negative lines are clawbacks for refunds of previously paid commissions.</p>
+</div>
+<%- include('../partials/footer') %>

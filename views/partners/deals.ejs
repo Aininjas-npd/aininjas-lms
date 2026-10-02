@@ -1,0 +1,17 @@
+<%- include('../partials/header') %>
+<h1>Your deals</h1>
+<p class="muted small">Register a buyer you are personally introducing — a school, a company or a parent — so the sale is credited to you even if they later buy directly. AI Ninjas confirms each registration; a confirmed deal is yours for <%= dealDays %> days. Register the organisation's email domain for a school or company, or the buyer's email for an individual.</p>
+<table class="table"><thead><tr><th>Matches</th><th>Label</th><th>Submitted</th><th>Expires</th><th>Status</th></tr></thead><tbody>
+<% deals.forEach(d => { %><tr><td><span class="muted small"><%= d.match_kind %></span> <code><%= d.match_value %></code></td><td><%= d.label || '' %></td><td class="small"><%= d.registered_at.slice(0, 10) %></td><td class="small"><%= d.expires_at.slice(0, 10) %></td><td><span class="badge <%= d.status === 'won' ? 'active' : (d.status === 'registered' ? 'steel' : (d.status === 'proposed' ? 'pending' : 'disabled')) %>"><%= d.status === 'registered' ? 'confirmed' : d.status %></span></td></tr><% }) %>
+<% if (!deals.length) { %><tr><td colspan="5" class="muted">No deals registered yet.</td></tr><% } %>
+</tbody></table>
+<div class="card" style="margin-top:14px"><h2>Register a deal</h2>
+  <form method="post" action="/partners/deals" class="row gap wrap">
+    <label>Match by<select name="match_kind"><option value="domain">organisation email domain</option><option value="email">buyer's email</option></select></label>
+    <label style="flex:1">Value<input type="text" name="match_value" required placeholder="greenfield.edu or parent@example.com"></label>
+    <label style="flex:1">Who is it<input type="text" name="label" placeholder="Greenfield Academy, Ms Rao (head of ICT)"></label>
+    <label style="flex:1">Notes<input type="text" name="notes" placeholder="met at the Dubai expo, demo booked"></label>
+    <button class="btn small">Submit</button>
+  </form>
+</div>
+<%- include('../partials/footer') %>

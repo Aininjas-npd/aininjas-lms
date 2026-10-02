@@ -100,6 +100,7 @@ app.use(require('./src/routes/classes'));   // teacher / school-admin class view
 app.use('/admin', require('./src/routes/curriculum'));   // before admin: /admin/curricula/:id beats admin's own patterns
 app.use('/admin', commerceRoutes.adminRouter);          // /admin/products, /admin/orders
 app.use('/admin', partnerRoutes.adminRouter);           // /admin/partners, /admin/commissions
+app.use('/partners', partnerRoutes.portalRouter);       // the partner portal (role partner)
 app.use('/admin', require('./src/routes/admin'));
 
 app.use((req, res) => res.status(404).render('error', { title: 'Not found', message: 'Page not found.' }));

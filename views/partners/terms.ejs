@@ -1,0 +1,11 @@
+<%- include('../partials/header') %>
+<h1>Partner programme terms</h1>
+<div class="card">
+  <p>Welcome, <%= partner.contact_name || partner.name %>. Before the portal opens, please read and accept the AI Ninjas partner terms<% if (termsUrl) { %>: <a href="<%= termsUrl %>" target="_blank"><%= termsUrl %></a><% } else { %> (your agreement with AI Ninjas)<% } %>.</p>
+  <p class="small">In short: you earn <strong><%= partner.rate_first %>%</strong> of the first payment of every sale credited to you<% if (partner.renewal_months > 0) { %> and <strong><%= partner.rate_renewal %>%</strong> of renewals for <%= partner.renewal_months %> months<% } %>. A sale is credited to you when the buyer uses your link or code, or when a deal you registered is confirmed. Commissions are approved after the refund window and paid against a monthly statement. You must not spam, bid on the AI Ninjas name in ads, or use your own code to buy for yourself.</p>
+  <form method="post" action="/partners/terms">
+    <label class="check"><input type="checkbox" name="accept"> I have read and accept the partner terms</label>
+    <p><button class="btn">Continue</button></p>
+  </form>
+</div>
+<%- include('../partials/footer') %>

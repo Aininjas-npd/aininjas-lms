@@ -1,0 +1,13 @@
+<%- include('../partials/header') %>
+<h1>Partner settings</h1>
+<div class="card"><h2>How we pay you</h2>
+  <p class="small muted">Statements are paid by bank transfer or PayPal within 45 days of the month end. Tell us how you would like to receive payment. Do not type card numbers here; for bank details, the account name, bank and IBAN/account number are enough.</p>
+  <form method="post" action="/partners/settings">
+    <label>Payout details<textarea name="payout_details" rows="3" maxlength="500" placeholder="PayPal: name@example.com — or — Bank: Emirates NBD, Account name …, IBAN …"><%= partner.payout_details || '' %></textarea></label>
+    <p><button class="btn">Save</button></p>
+  </form>
+</div>
+<div class="card"><h2>Your programme</h2>
+  <p class="small">Code <code><%= partner.code %></code> · <%= partner.rate_first %>% of first payments · <%= partner.rate_renewal %>% of renewals for <%= partner.renewal_months %> months<%= partner.discount_percent > 0 ? ' · buyers get ' + partner.discount_percent + '% off with your code' : '' %>.<br><span class="muted">Terms accepted <%= partner.terms_accepted_at ? partner.terms_accepted_at.slice(0, 10) : '—' %>. To change your rates, code or email, write to partners@aininjas.com.</span></p>
+</div>
+<%- include('../partials/footer') %>

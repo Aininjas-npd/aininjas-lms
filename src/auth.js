@@ -17,7 +17,7 @@ const sso = ACCOUNTS_URL && process.env.SSO_SECRET
 const safeReturn = v => (/^\/(?!\/)/.test(String(v || '')) ? String(v) : '');
 
 /* Create/update the local user from Accounts claims. Accounts-granted users are approved by definition. */
-const ROLES = ['admin', 'school_admin', 'teacher', 'learner'];
+const ROLES = ['admin', 'school_admin', 'teacher', 'learner', 'partner'];   // partner: affiliate / BD agent portal only (Phase 3)
 const STAFF = ['admin', 'school_admin', 'teacher'];
 function upsertFromSso({ sub, email, name, role, scope }) {
   const em = String(email).toLowerCase();
@@ -130,6 +130,8 @@ function currentUser(req, res, next) {
 function requireLogin(req, res, next) {
   if (!req.user) { req.session.returnTo = req.originalUrl; return res.redirect(sso ? '/auth/sso?return=' + encodeURIComponent(req.originalUrl) : '/login'); }
   if (req.user.status !== 'approved') return res.redirect('/pending');
+  // a partner (affiliate / BD agent) only has the partner portal and their profile
+  if (req.user.role === 'partner' && !/^\/(partners|profile|logout|stop-viewing)(\/|$|\?)/.test(req.originalUrl.split('?')[0])) return res.redirect('/partners');
   // a student whose school has classes picks theirs once (teachers can correct it later)
   if (req.user.role === 'learner' && req.user.school_slug && !req.user.class_name && res.locals.brand && (res.locals.brand.classes || []).length && !req.path.startsWith('/pick-class')) {
     req.session.returnTo = req.originalUrl; return res.redirect('/pick-class');
@@ -142,7 +144,7 @@ function requireStaff(req, res, next) {
   if (!STAFF.includes(req.user.role)) return res.status(403).render('error', { title: 'Teachers only', message: 'This page is for teachers and school admins.' });
   next();
 }
-const homeFor = u => u.role === 'admin' ? '/admin' : (u.role === 'teacher' || u.role === 'school_admin') ? '/classes' : '/dashboard';
+const homeFor = u => u.role === 'admin' ? '/admin' : (u.role === 'teacher' || u.role === 'school_admin') ? '/classes' : u.role === 'partner' ? '/partners' : '/dashboard';
 function requireAdmin(req, res, next) {
   if (!req.user) return res.redirect('/login');
   if (req.user.role !== 'admin') return res.status(403).render('error', { title: 'Forbidden', message: 'Admins only.' });

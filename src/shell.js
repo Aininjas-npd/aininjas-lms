@@ -2,7 +2,7 @@
 // Quiz Studio and Accounts so their pages show the same header (see proxy.js / onesite.js).
 const onesite = require('./onesite');
 
-const ROLE_LABEL = { admin: 'Administrator', school_admin: 'School Admin', teacher: 'Teacher' };
+const ROLE_LABEL = { admin: 'Administrator', school_admin: 'School Admin', teacher: 'Teacher', partner: 'Partner' };
 const STAFF = ['admin', 'school_admin', 'teacher'];
 
 /** Primary menu items for a signed-in, approved user. `path` is the current request path for the "on" state. */
@@ -11,6 +11,14 @@ function navFor(user, path = '', pluginNav = [], viewing = false) {
   const items = [];
   const staff = STAFF.includes(user.role);
   const on = (test) => typeof test === 'function' ? test(path) : path === test;
+  if (user.role === 'partner') {   // the partner portal is the whole menu for a partner
+    items.push({ href: '/partners', label: 'Overview', on: on('/partners') });
+    items.push({ href: '/partners/sales', label: 'Sales', on: on('/partners/sales') });
+    items.push({ href: '/partners/commissions', label: 'Commissions', on: on(p => p.startsWith('/partners/commissions') || p.startsWith('/partners/statements')) });
+    items.push({ href: '/partners/deals', label: 'Deals', on: on('/partners/deals') });
+    items.push({ href: '/partners/settings', label: 'Settings', on: on('/partners/settings') });
+    return items;
+  }
   if (user.role === 'learner' || user.role === 'admin') items.push({ href: '/dashboard', label: 'My courses', on: on('/dashboard') });
   if (user.role === 'learner') items.push({ href: '/assignments', label: 'Assignments', on: on(p => p.startsWith('/assignments')) });
   if (staff) items.push({ href: '/classes', label: user.role === 'teacher' ? 'My classes' : 'Classes', on: on(p => p.startsWith('/classes') || p.startsWith('/students')) });
@@ -21,7 +29,7 @@ function navFor(user, path = '', pluginNav = [], viewing = false) {
     items.push({ href: '/admin/curricula', label: 'Curricula', on: on(p => p.startsWith('/admin/curricula')) });
     items.push({ href: '/admin/users', label: 'Users', on: on(p => p.startsWith('/admin/users')) });
     items.push({ href: '/admin/orders', label: 'Orders', on: on(p => p.startsWith('/admin/orders') || p.startsWith('/admin/products')) });
-    items.push({ href: '/admin/partners', label: 'Partners', on: on(p => p.startsWith('/admin/partners') || p.startsWith('/admin/commissions')) });
+    items.push({ href: '/admin/partners', label: 'Partners', on: on(p => p.startsWith('/admin/partners') || p.startsWith('/admin/commissions') || p.startsWith('/admin/payouts')) });
     items.push({ href: '/admin', label: 'Activity', on: on(p => p === '/admin' || p === '/admin/') });
   }
   return items;

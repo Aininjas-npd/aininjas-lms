@@ -1,0 +1,24 @@
+<%- include('../partials/header') %>
+<div class="row between wrap"><h1>Hello, <%= partner.contact_name || partner.name %></h1><span class="badge <%= partner.status === 'active' ? 'active' : 'pending' %>"><%= partner.status %></span></div>
+<% if (partner.status === 'paused') { %><div class="flash error">Your partnership is paused: links and codes do not credit new sales at the moment. Write to partners@aininjas.com.</div><% } %>
+
+<div class="row gap wrap" style="align-items:stretch">
+  <div class="card" style="flex:2;min-width:300px"><h2>Your link and code</h2>
+    <p>Share this link anywhere: <code id="lnk"><%= partner.link %></code> <button class="btn small ghost" type="button" onclick="navigator.clipboard.writeText(document.getElementById('lnk').textContent);this.textContent='Copied'">Copy</button></p>
+    <% if (products.length) { %><p class="small muted">Straight to one course: <% products.forEach(x => { %><code><%= partner.link %>?to=<%= x.slug %></code> <% }) %></p><% } %>
+    <% if (partner.discount_percent > 0) { %><p>Coupon code at checkout: <code><%= partner.code %></code> — gives the buyer <%= partner.discount_percent %>% off their first payment and credits the sale to you.</p><% } else { %><p class="small muted">Your code <code><%= partner.code %></code> works in links; there is no checkout discount attached to it.</p><% } %>
+    <p class="small muted">A buyer is credited to you if they purchase within <%= windowDays %> days of using your link, or type your code at checkout. Deals you register (Deals tab) take precedence over links and codes.</p>
+  </div>
+  <div class="card" style="flex:1;min-width:220px"><h2>At a glance</h2>
+    <p class="small"><strong><%= stats.clicks %></strong> link clicks<br><strong><%= stats.sales_n %></strong> sales credited (<%= money(stats.sales_cents, 'usd') %>), <%= stats.this_month_n %> this month<br>Earned <strong><%= money(stats.earned, 'usd') %></strong><br>Owed to you <strong><%= money(stats.owed, 'usd') %></strong> · paid <%= money(stats.paid, 'usd') %></p>
+  </div>
+</div>
+
+<div class="card"><h2>Recent sales</h2>
+  <table class="table"><thead><tr><th>When</th><th>Product</th><th>Paid</th><th>Credited by</th><th>Your commission</th></tr></thead><tbody>
+  <% recent.forEach(o => { %><tr><td class="small"><%= (o.paid_at || o.created_at).slice(0, 10) %></td><td><%= o.product_name || o.product_slug %> <span class="muted small"><%= o.kind === 'yearly' ? 'yearly' : '' %></span></td><td><%= o.display %><% if (o.status !== 'paid') { %> <span class="badge"><%= o.status %></span><% } %></td><td><span class="badge steel"><%= o.attribution %></span></td><td><%= o.cdisplay || '—' %><% if (o.commission_status) { %> <span class="badge <%= o.commission_status === 'paid' ? 'active' : (o.commission_status === 'reversed' ? 'disabled' : 'pending') %>"><%= o.commission_status %></span><% } %></td></tr><% }) %>
+  <% if (!recent.length) { %><tr><td colspan="5" class="muted">No sales yet — share your link!</td></tr><% } %>
+  </tbody></table>
+  <p class="small"><a href="/partners/sales">All sales →</a> · <a href="/partners/commissions">Commissions and statements →</a></p>
+</div>
+<%- include('../partials/footer') %>

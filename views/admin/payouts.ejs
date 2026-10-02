@@ -1,0 +1,23 @@
+<%- include('../partials/header') %>
+<div class="row between wrap"><h1>Statements &amp; payouts</h1><div class="row gap"><a class="btn small ghost" href="/admin/commissions">Commissions →</a><a class="btn small ghost" href="/admin/partners">Partners →</a></div></div>
+<p class="muted small">Monthly routine: wait <%= clawbackDays %> days after the month ends → Commissions → approve the month's rows → issue statements here → pay each partner by bank transfer / PayPal → mark the statement paid with the reference. Partners see their statements in the portal.</p>
+
+<% if (proposed.length) { %><div class="card"><h2>Deals proposed by partners</h2>
+  <table class="table"><thead><tr><th>Partner</th><th>Matches</th><th>Label / notes</th><th>Submitted</th><th></th></tr></thead><tbody>
+  <% proposed.forEach(d => { %><tr><td><a href="/admin/partners/<%= d.partner_id %>"><%= d.partner_name %></a></td><td><span class="muted small"><%= d.match_kind %></span> <code><%= d.match_value %></code></td><td class="small"><%= d.label || '' %><%= d.notes ? ' — ' + d.notes : '' %></td><td class="small"><%= d.registered_at.slice(0, 10) %></td><td class="actions"><form method="post" action="/admin/partners/<%= d.partner_id %>/deals/<%= d.id %>/approve" class="inline"><button class="btn small">Approve</button></form> <form method="post" action="/admin/partners/<%= d.partner_id %>/deals/<%= d.id %>/rejected" class="inline"><button class="link small">reject</button></form></td></tr><% }) %>
+  </tbody></table></div><% } %>
+
+<div class="card"><h2>Issue statements</h2>
+  <% if (pending.length) { %><table class="table"><thead><tr><th>Month</th><th>Partners</th><th>Approved, not yet on a statement</th><th></th></tr></thead><tbody>
+  <% pending.forEach(p => { %><tr><td><%= p.period %></td><td><%= p.partners %></td><td><%= p.display %></td><td class="actions"><form method="post" action="/admin/payouts/create" class="inline"><input type="hidden" name="period" value="<%= p.period %>"><button class="btn small">Issue statements for <%= p.period %></button></form></td></tr><% }) %>
+  </tbody></table><% } else { %><p class="muted small">Nothing to issue: approve commissions first (Commissions → select rows → Approve).</p><% } %>
+</div>
+
+<form class="row gap wrap" method="get" style="margin-bottom:10px"><select name="status" onchange="this.form.submit()"><option value="">Any status</option><% ['issued','paid','void'].forEach(s => { %><option value="<%= s %>" <%= status === s ? 'selected' : '' %>><%= s %></option><% }) %></select></form>
+<table class="table"><thead><tr><th>#</th><th>Month</th><th>Partner</th><th>Amount</th><th>Issued</th><th>Status</th><th></th></tr></thead><tbody>
+<% payouts.forEach(py => { %><tr><td><%= py.id %></td><td><%= py.period %></td><td><a href="/admin/partners/<%= py.partner_id %>"><%= py.partner_name %></a> <span class="muted small"><%= py.partner_code %></span></td><td><strong><%= py.display %></strong></td><td class="small"><%= py.issued_at.slice(0, 10) %></td>
+  <td><span class="badge <%= py.status === 'paid' ? 'active' : (py.status === 'void' ? 'disabled' : 'pending') %>"><%= py.status %></span><% if (py.paid_at) { %><br><span class="muted small"><%= py.paid_at.slice(0, 10) %><%= py.reference ? ' · ' + py.reference : '' %></span><% } %></td>
+  <td class="actions"><a class="btn small ghost" href="/admin/payouts/<%= py.id %>">View</a> <% if (py.status === 'issued') { %><form method="post" action="/admin/payouts/<%= py.id %>/paid" class="inline"><input type="text" name="reference" placeholder="payment ref" style="width:130px"><button class="btn small">Mark paid</button></form> <form method="post" action="/admin/payouts/<%= py.id %>/void" class="inline"><button class="link small" onclick="return confirm('Void this statement? Its commissions go back to approved and can be re-issued.')">void</button></form><% } %></td></tr><% }) %>
+<% if (!payouts.length) { %><tr><td colspan="7" class="muted">No statements yet.</td></tr><% } %>
+</tbody></table>
+<%- include('../partials/footer') %>

@@ -1,0 +1,8 @@
+<%- include('../partials/header') %>
+<h1>Your sales</h1>
+<p class="muted small">Every order credited to you. Buyers are not named here — AI Ninjas keeps learner details private; you see the sale, the amount paid and your commission.</p>
+<table class="table"><thead><tr><th>#</th><th>When</th><th>Product</th><th>Paid</th><th>Status</th><th>Credited by</th><th>Commission</th></tr></thead><tbody>
+<% sales.forEach(o => { %><tr><td><%= o.id %></td><td class="small"><%= (o.paid_at || o.created_at).slice(0, 10) %></td><td><%= o.product_name || o.product_slug %><% if (o.kind === 'yearly') { %> <span class="muted small">yearly</span><% } %></td><td><%= o.display %></td><td><span class="badge <%= o.status === 'paid' ? 'active' : '' %>"><%= o.status %></span></td><td><span class="badge steel"><%= o.attribution %></span></td><td><%= o.cdisplay || '—' %><% if (o.commission_status) { %> <span class="badge <%= o.commission_status === 'paid' ? 'active' : (o.commission_status === 'reversed' ? 'disabled' : 'pending') %>"><%= o.commission_status %></span><% } %></td></tr><% }) %>
+<% if (!sales.length) { %><tr><td colspan="7" class="muted">No sales yet.</td></tr><% } %>
+</tbody></table>
+<%- include('../partials/footer') %>

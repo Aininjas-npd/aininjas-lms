@@ -20,7 +20,7 @@
     <% if (user && user.status === 'approved') { %>
       <% shellNav.forEach(n => { %><a href="<%= n.out ? withBack(n.href, title) : n.href %>" class="<%= n.on ? 'on' : '' %>"><%= n.label %></a><% }) %>
       <div class="right">
-        <a href="/profile" class="who <%= path === '/profile' ? 'on' : '' %>"><b><%= user.name %></b><small><%= { admin: 'Administrator', school_admin: 'School Admin', teacher: 'Teacher' }[user.role] || 'Learner' %></small></a>
+        <a href="/profile" class="who <%= path === '/profile' ? 'on' : '' %>"><b><%= user.name %></b><small><%= { admin: 'Administrator', school_admin: 'School Admin', teacher: 'Teacher', partner: 'Partner' }[user.role] || 'Learner' %></small></a>
         <% if (locals.accountHref) { %><a href="<%= accountHref %>" title="Your AI Ninjas account">Account</a><% } %>
         <form method="post" action="/logout" class="inline"><button class="link" type="submit">Log out</button></form>
       </div>

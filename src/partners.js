@@ -76,15 +76,34 @@ CREATE TABLE IF NOT EXISTS commissions (
 );
 CREATE INDEX IF NOT EXISTS idx_comm_partner ON commissions(partner_id, period);
 CREATE INDEX IF NOT EXISTS idx_comm_order ON commissions(order_id);
+CREATE TABLE IF NOT EXISTS payouts (                 -- Phase 3: one statement per partner per month
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  partner_id      INTEGER NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+  period          TEXT NOT NULL,                     -- YYYY-MM the statement covers
+  amount_cents    INTEGER NOT NULL,
+  currency        TEXT NOT NULL DEFAULT 'usd',
+  status          TEXT NOT NULL DEFAULT 'issued',    -- issued | paid | void
+  reference       TEXT,                              -- bank / PayPal reference once paid
+  issued_at       TEXT NOT NULL DEFAULT (datetime('now')),
+  paid_at         TEXT,
+  note            TEXT,
+  UNIQUE (partner_id, period)
+);
 `);
-const ocols = db.prepare('PRAGMA table_info(orders)').all().map(c => c.name);
-if (!ocols.includes('attributed_at')) db.exec('ALTER TABLE orders ADD COLUMN attributed_at TEXT');
-if (!ocols.includes('promotion_code')) db.exec('ALTER TABLE orders ADD COLUMN promotion_code TEXT');
+const addCol = (table, col, type) => { if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`); };
+addCol('partners', 'user_id', 'INTEGER');                 // the partner's Academy account (role partner), for the portal
+addCol('partners', 'terms_accepted_at', 'TEXT');
+addCol('partners', 'payout_details', 'TEXT');             // how they want to be paid, in their words
+addCol('deal_registrations', 'source', "TEXT NOT NULL DEFAULT 'admin'");   // admin | partner (portal)
+addCol('commissions', 'payout_id', 'INTEGER');
+/** orders columns this module adds; called by commerce.js once the orders table exists. */
+function ensureOrderColumns() { addCol('orders', 'attributed_at', 'TEXT'); addCol('orders', 'promotion_code', 'TEXT'); }
 
 /* ---------- partners ---------- */
 const CODE_RE = /^[A-Z0-9][A-Z0-9-]{2,19}$/;
 const partnerById = id => db.prepare('SELECT * FROM partners WHERE id=?').get(id);
 const partnerByCode = code => code ? db.prepare('SELECT * FROM partners WHERE code=?').get(String(code).trim().toUpperCase()) : null;
+const partnerByUser = u => u ? (db.prepare('SELECT * FROM partners WHERE user_id=?').get(u.id) || (u.email ? db.prepare('SELECT * FROM partners WHERE email=? AND user_id IS NULL').get(String(u.email).toLowerCase()) : null)) : null;
 const partnerByPromotionCode = id => id ? db.prepare('SELECT * FROM partners WHERE stripe_promotion_code_id=?').get(id) : null;
 const listPartners = () => db.prepare(`SELECT p.*, (SELECT COUNT(*) FROM orders o WHERE o.partner_id=p.id AND o.status IN ('paid','refunded','lapsed')) AS orders_n,
   (SELECT COALESCE(SUM(amount_cents),0) FROM commissions c WHERE c.partner_id=p.id AND c.status<>'reversed') AS earned_cents,
@@ -139,22 +158,24 @@ async function syncPromotionCode(p, previous) {
 function linkFor(p, baseUrl) { return { link: `${baseUrl}/p/${p.code}`, landing: `${MAIN_SITE}/?ref=${p.code}` }; }
 
 /* ---------- deals ---------- */
-function registerDeal(partnerId, input) {
+function registerDeal(partnerId, input, { source = 'admin' } = {}) {
   const p = partnerById(partnerId); if (!p) throw new Error('No such partner');
   const kind = ['school', 'email', 'domain'].includes(input.match_kind) ? input.match_kind : 'email';
   let value = String(input.match_value || '').trim().toLowerCase();
   if (kind === 'domain') value = value.replace(/^@/, '');
   if (!value || (kind === 'email' && !value.includes('@')) || (kind === 'domain' && value.includes('@'))) throw new Error(kind === 'email' ? 'Enter the buyer\'s email' : kind === 'domain' ? 'Enter the organisation\'s email domain, e.g. greenfield.edu' : 'Enter the school slug');
   if (kind === 'domain' && /^(gmail|yahoo|hotmail|outlook|icloud|live|aol|proton|protonmail)\.com$|^(gmail|yahoo)\.[a-z.]+$/.test(value)) throw new Error('A public mail domain cannot be registered as a deal — register the buyer\'s email instead');
-  const open = db.prepare("SELECT d.*, p.name partner_name FROM deal_registrations d JOIN partners p ON p.id=d.partner_id WHERE d.match_kind=? AND d.match_value=? AND d.status='registered' AND d.expires_at > datetime('now')").get(kind, value);
+  const open = db.prepare("SELECT d.*, p.name partner_name FROM deal_registrations d JOIN partners p ON p.id=d.partner_id WHERE d.match_kind=? AND d.match_value=? AND d.status IN ('registered','proposed') AND d.expires_at > datetime('now')").get(kind, value);
   if (open) throw new Error(`Already registered by ${open.partner_name} until ${open.expires_at.slice(0, 10)}`);
   const days = Math.max(1, +input.days || DEAL_DAYS);
-  const id = db.prepare(`INSERT INTO deal_registrations (partner_id, match_kind, match_value, label, expires_at, notes) VALUES (?, ?, ?, ?, datetime('now', '+${days} days'), ?)`).run(p.id, kind, value, String(input.label || '').trim() || null, String(input.notes || '').trim() || null).lastInsertRowid;
+  const status = source === 'partner' ? 'proposed' : 'registered';   // a partner's own registration waits for an admin to approve it
+  const id = db.prepare(`INSERT INTO deal_registrations (partner_id, match_kind, match_value, label, expires_at, notes, source, status) VALUES (?, ?, ?, ?, datetime('now', '+${days} days'), ?, ?, ?)`).run(p.id, kind, value, String(input.label || '').trim() || null, String(input.notes || '').trim() || null, source, status).lastInsertRowid;
   q.logEvent.run(null, null, null, 'deal_registered', JSON.stringify({ id, partner_id: p.id, kind, value }));
   return db.prepare('SELECT * FROM deal_registrations WHERE id=?').get(id);
 }
 const listDeals = partnerId => db.prepare('SELECT * FROM deal_registrations WHERE partner_id=? ORDER BY id DESC').all(partnerId);
-function setDealStatus(id, status) { if (!['registered', 'rejected', 'expired'].includes(status)) throw new Error('bad status'); db.prepare('UPDATE deal_registrations SET status=? WHERE id=?').run(status, id); }
+function setDealStatus(id, status) { if (!['registered', 'rejected', 'expired'].includes(status)) throw new Error('bad status'); db.prepare("UPDATE deal_registrations SET status=? WHERE id=? AND status<>'won'").run(status, id); }
+const proposedDeals = () => db.prepare("SELECT d.*, p.name partner_name, p.code partner_code FROM deal_registrations d JOIN partners p ON p.id=d.partner_id WHERE d.status='proposed' ORDER BY d.id").all();
 
 /** An open registered deal that matches this buyer (email / its domain) or school. */
 function matchDeal({ email, schoolSlug }) {
@@ -274,8 +295,88 @@ function click(code) { const p = partnerByCode(code); if (p) db.prepare('UPDATE 
 
 /** On account deletion: the order stays as a financial record, but nothing identifies the person any more. */
 function anonymiseOrders(userId, email) {
+  db.prepare('UPDATE partners SET user_id=NULL WHERE user_id=?').run(userId);
   const hash = email ? crypto.createHash('sha256').update(String(email).toLowerCase()).digest('hex').slice(0, 12) : null;
   return db.prepare("UPDATE orders SET user_id=NULL, buyer_email=?, buyer_name=NULL, metadata=NULL WHERE user_id=? OR (buyer_email IS NOT NULL AND buyer_email=?)").run(hash ? `deleted-${hash}@removed.invalid` : null, userId, String(email || '').toLowerCase()).changes;
 }
 
-module.exports = { WINDOW_DAYS, CLAWBACK_DAYS, DEAL_DAYS, DEFAULT_RATES, MAIN_SITE, setStripe, partnerById, partnerByCode, partnerByPromotionCode, listPartners, savePartner, syncPromotionCode, linkFor, registerDeal, listDeals, setDealStatus, matchDeal, attribute, bookCommission, clawback, setCommissionStatus, bulkStatus, listCommissions, commissionsForOrder, summary, periods, partnerOrders, csv, click, anonymiseOrders };
+/* ---------- Phase 3: partner accounts, statements, portal ---------- */
+let accountsApi = null;
+function setAccountsApi(fn) { accountsApi = fn; }
+
+/** Called on every SSO sign-in / local login: a user with role partner is linked to the partner record with their email. */
+function linkUser(user) {
+  if (!user || user.role !== 'partner') return null;
+  let p = db.prepare('SELECT * FROM partners WHERE user_id=?').get(user.id);
+  if (!p && user.email) { p = db.prepare('SELECT * FROM partners WHERE email=? AND (user_id IS NULL OR user_id=?)').get(String(user.email).toLowerCase(), user.id); if (p) db.prepare('UPDATE partners SET user_id=? WHERE id=?').run(user.id, p.id); }
+  return p || null;
+}
+/** Invite the partner to the portal: an Accounts grant with role partner (invitation email), or a local account when SSO is off. */
+async function invitePartner(p) {
+  if (!p.email) throw new Error('Add the partner\'s email first');
+  const existing = q.userByEmail.get(p.email);
+  if (existing) {
+    if (existing.role !== 'partner') throw new Error(`${p.email} already has an Academy account as ${existing.role}; a partner needs their own email`);
+    db.prepare('UPDATE partners SET user_id=? WHERE id=?').run(existing.id, p.id); return { user: existing, created: false };
+  }
+  if (accountsApi) {
+    const r = await accountsApi('/grants', { method: 'POST', body: { email: p.email, name: p.contact_name || p.name, role: 'partner', invited_by: 'AI Ninjas partner programme' } });
+    let u = null; for (let i = 0; i < 10; i++) { u = q.userByEmail.get(p.email); if (u) break; await new Promise(res => setTimeout(res, 300)); }
+    if (!u) u = require('./auth').upsertFromSso({ sub: r.user.id, email: p.email, name: p.contact_name || p.name, role: 'partner', scope: {} });
+    db.prepare('UPDATE partners SET user_id=? WHERE id=?').run(u.id, p.id);
+    return { user: u, created: true, invite: r.inviteLink || null };
+  }
+  const info = db.prepare(`INSERT INTO users (email, name, role, status, approved_at, display_handle, organization) VALUES (?, ?, 'partner', 'approved', datetime('now'), ?, ?)`).run(p.email, p.contact_name || p.name, 'Partner' + crypto.randomInt(1000, 9999), p.name);
+  db.prepare('UPDATE partners SET user_id=? WHERE id=?').run(info.lastInsertRowid, p.id);
+  return { user: q.userById.get(info.lastInsertRowid), created: true, local: true };
+}
+function acceptTerms(p) { db.prepare("UPDATE partners SET terms_accepted_at=datetime('now') WHERE id=?").run(p.id); }
+function savePayoutDetails(p, text) { db.prepare("UPDATE partners SET payout_details=?, updated_at=datetime('now') WHERE id=?").run(String(text || '').trim().slice(0, 500) || null, p.id); }
+
+/** What the partner sees about their own sales: no buyer identity, just the order facts. */
+const partnerSales = partnerId => db.prepare(`SELECT o.id, o.paid_at, o.created_at, o.status, o.amount_cents, o.currency, o.kind, o.attribution, pr.name product_name, o.product_slug,
+  (SELECT amount_cents FROM commissions c WHERE c.order_id=o.id AND c.kind IN ('first','renewal') LIMIT 1) commission_cents,
+  (SELECT status FROM commissions c WHERE c.order_id=o.id AND c.kind IN ('first','renewal') LIMIT 1) commission_status
+  FROM orders o LEFT JOIN products pr ON pr.id=o.product_id WHERE o.partner_id=? AND o.status<>'pending' ORDER BY o.id DESC LIMIT 500`).all(partnerId);
+function partnerStats(partnerId) {
+  const c = db.prepare(`SELECT COALESCE(SUM(CASE WHEN status<>'reversed' THEN amount_cents END),0) earned, COALESCE(SUM(CASE WHEN status IN ('pending','approved') THEN amount_cents END),0) owed, COALESCE(SUM(CASE WHEN status='paid' THEN amount_cents END),0) paid FROM commissions WHERE partner_id=?`).get(partnerId);
+  const o = db.prepare(`SELECT COUNT(*) n, COALESCE(SUM(amount_cents),0) cents FROM orders WHERE partner_id=? AND status IN ('paid','refunded','lapsed')`).get(partnerId);
+  const m = db.prepare(`SELECT COUNT(*) n FROM orders WHERE partner_id=? AND status='paid' AND paid_at >= date('now','start of month')`).get(partnerId);
+  return { ...c, sales_n: o.n, sales_cents: o.cents, this_month_n: m.n, clicks: (partnerById(partnerId) || {}).clicks || 0 };
+}
+
+/** Statements. One per partner per month: every approved (or clawback) commission of that period not yet on a statement. */
+function createStatements(per, { by } = {}) {
+  if (!/^\d{4}-\d{2}$/.test(per)) throw new Error('Month must look like 2026-10');
+  const rows = db.prepare("SELECT partner_id, SUM(amount_cents) cents, COUNT(*) n, MIN(currency) currency FROM commissions WHERE period=? AND payout_id IS NULL AND (status='approved' OR (kind='clawback' AND status<>'reversed')) GROUP BY partner_id").all(per);
+  const made = [];
+  db.transaction(() => {
+    for (const r of rows) {
+      if (db.prepare('SELECT 1 FROM payouts WHERE partner_id=? AND period=? AND status<>?').get(r.partner_id, per, 'void')) continue;
+      const id = db.prepare('INSERT INTO payouts (partner_id, period, amount_cents, currency) VALUES (?, ?, ?, ?)').run(r.partner_id, per, r.cents, r.currency || 'usd').lastInsertRowid;
+      db.prepare("UPDATE commissions SET payout_id=? WHERE period=? AND partner_id=? AND payout_id IS NULL AND (status='approved' OR (kind='clawback' AND status<>'reversed'))").run(id, per, r.partner_id);
+      made.push(id);
+    }
+  })();
+  q.logEvent.run(null, null, null, 'statements_created', JSON.stringify({ period: per, payouts: made, by }));
+  return made.map(payoutById);
+}
+const payoutById = id => db.prepare('SELECT py.*, p.name partner_name, p.code partner_code, p.email partner_email, p.payout_details, p.type partner_type FROM payouts py JOIN partners p ON p.id=py.partner_id WHERE py.id=?').get(id);
+const listPayouts = ({ partnerId, status } = {}) => db.prepare(`SELECT py.*, p.name partner_name, p.code partner_code FROM payouts py JOIN partners p ON p.id=py.partner_id WHERE 1=1 ${partnerId ? 'AND py.partner_id=@partnerId' : ''} ${status ? 'AND py.status=@status' : ''} ORDER BY py.period DESC, p.name`).all({ partnerId, status });
+const payoutLines = id => db.prepare('SELECT c.*, o.product_slug, o.paid_at order_paid_at, o.kind order_kind FROM commissions c LEFT JOIN orders o ON o.id=c.order_id WHERE c.payout_id=? ORDER BY c.id').all(id);
+function markPayoutPaid(id, { reference, by } = {}) {
+  const py = payoutById(id); if (!py) throw new Error('No such statement');
+  if (py.status === 'paid') throw new Error('Already paid');
+  db.transaction(() => {
+    db.prepare("UPDATE payouts SET status='paid', paid_at=datetime('now'), reference=? WHERE id=?").run(String(reference || '').trim() || null, id);
+    db.prepare("UPDATE commissions SET status='paid', paid_at=datetime('now') WHERE payout_id=? AND status<>'reversed'").run(id);
+  })();
+  q.logEvent.run(null, null, null, 'payout_paid', JSON.stringify({ id, reference, by }));
+}
+function voidPayout(id) {
+  db.transaction(() => { db.prepare("UPDATE payouts SET status='void' WHERE id=? AND status='issued'").run(id); db.prepare('UPDATE commissions SET payout_id=NULL WHERE payout_id=? AND status<>?').run(id, 'paid'); })();
+}
+/** Months whose approved commissions are not on a statement yet (what the admin can issue). */
+const unstatementedPeriods = () => db.prepare("SELECT period, COUNT(DISTINCT partner_id) partners, SUM(amount_cents) cents FROM commissions WHERE payout_id IS NULL AND (status='approved' OR (kind='clawback' AND status<>'reversed')) GROUP BY period ORDER BY period DESC").all();
+
+module.exports = { ensureOrderColumns, partnerByUser, proposedDeals, setAccountsApi, linkUser, invitePartner, acceptTerms, savePayoutDetails, partnerSales, partnerStats, createStatements, payoutById, listPayouts, payoutLines, markPayoutPaid, voidPayout, unstatementedPeriods, WINDOW_DAYS, CLAWBACK_DAYS, DEAL_DAYS, DEFAULT_RATES, MAIN_SITE, setStripe, partnerById, partnerByCode, partnerByPromotionCode, listPartners, savePartner, syncPromotionCode, linkFor, registerDeal, listDeals, setDealStatus, matchDeal, attribute, bookCommission, clawback, setCommissionStatus, bulkStatus, listCommissions, commissionsForOrder, summary, periods, partnerOrders, csv, click, anonymiseOrders };

@@ -268,3 +268,17 @@ Attachments follow the step's audience: files on a teachers-only step cannot be 
   renewal rate until `renewal_months` after the first sale.
 - Deleting a user (Accounts → Delete everywhere) keeps their orders as financial records but strips the name, email
   and user link from them.
+
+## Partner portal and statements (Phase 3)
+
+- **Portal** at `/partners` for users with the Accounts role *Partner* (Admin → Partners → partner → *Invite to
+  portal* creates the grant through Accounts, which emails the invitation; the record is linked by email). First
+  visit shows the terms (`PARTNER_TERMS_URL`) to accept. Pages: Overview (link, code, stats), Sales (orders credited
+  to them — amount, product, status, commission; never the buyer's identity), Commissions (ledger + statements, CSV),
+  Deals (register a buyer / email domain — enters as *proposed* until an admin approves it on Admin → Statements or
+  the partner's page), Settings (how they want to be paid). Partners have no other Academy pages.
+- **Statements** (Admin → Statements & payouts): after the refund window, approve the month's commissions, then
+  *Issue statements for <month>* — one per partner, covering their approved commissions and any clawbacks. Pay by bank
+  transfer / PayPal outside the Academy and *Mark paid* with the reference: the statement and its commissions become
+  paid and the partner sees it in the portal. A statement can be voided before payment (its commissions return to
+  approved). Statement pages print to PDF from the browser and download as CSV.
