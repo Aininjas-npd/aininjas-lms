@@ -109,7 +109,7 @@ admin.post('/partners/:id/invite', async (req, res) => {
 });
 admin.get('/payouts', (req, res) => {
   const list = partners.listPayouts({ status: String(req.query.status || '') || null }).map(x => ({ ...x, display: money(x.amount_cents, x.currency) }));
-  res.render('admin/payouts', { title: 'Statements & payouts', payouts: list, pending: partners.unstatementedPeriods().map(x => ({ ...x, display: money(x.cents, 'usd') })), proposed: partners.proposedDeals(), status: String(req.query.status || ''), money, clawbackDays: partners.CLAWBACK_DAYS });
+  res.render('admin/payouts', { title: 'Payouts', payouts: list, pending: partners.unstatementedPeriods().map(x => ({ ...x, display: money(x.cents, 'usd') })), proposed: partners.proposedDeals(), status: String(req.query.status || ''), money, clawbackDays: partners.CLAWBACK_DAYS });
 });
 admin.post('/payouts/create', (req, res) => {
   try { const made = partners.createStatements(String(req.body.period || ''), { by: req.user.id }); flash(req, made.length ? 'success' : 'error', made.length ? `${made.length} statement(s) issued for ${req.body.period}: ${made.map(m => m.partner_name + ' ' + money(m.amount_cents, m.currency)).join(', ')}.` : 'Nothing to issue: approve the month\'s commissions first (Commissions → select → Approve).'); }

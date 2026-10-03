@@ -10,7 +10,7 @@
     <p class="small muted">A buyer is credited to you if they purchase within <%= windowDays %> days of using your link, or type your code at checkout. Deals you register (Deals tab) take precedence over links and codes.</p>
   </div>
   <div class="card" style="flex:1;min-width:220px"><h2>At a glance</h2>
-    <p class="small"><strong><%= stats.clicks %></strong> link clicks<br><strong><%= stats.sales_n %></strong> sales credited (<%= money(stats.sales_cents, 'usd') %>), <%= stats.this_month_n %> this month<br>Earned <strong><%= money(stats.earned, 'usd') %></strong><br>Owed to you <strong><%= money(stats.owed, 'usd') %></strong> · paid <%= money(stats.paid, 'usd') %></p>
+    <p class="small"><strong><%= stats.clicks %></strong> link clicks<br><strong><%= stats.sales_n %></strong> sales credited (<%= money(stats.sales_cents, 'usd') %>), <%= stats.this_month_n %> this month<br>Paid out to you <strong><%= money(stats.paid, 'usd') %></strong><br>Awaiting payment <strong><%= money(stats.owed, 'usd') %></strong> · earned in total <%= money(stats.earned, 'usd') %></p>
   </div>
 </div>
 

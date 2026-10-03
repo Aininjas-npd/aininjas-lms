@@ -77,7 +77,7 @@ async function purchase(db, slug, { cookie, email }) {
   ok('… without any buyer identity', !/buyer\.test/.test(html) && !/parent\./.test(html));
   ok('… and not the other partner\'s order', !/OTHER/.test(html) && (html.match(/<td>\d+<\/td><td class="small">/g) || []).length === 2);
   html = await (await partner('/partners')).text();
-  ok('overview stats: 2 sales, $40 earned, $40 owed', /<strong>2<\/strong> sales credited/.test(html) && /Earned <strong>\$40<\/strong>/.test(html));
+  ok('overview stats: 2 sales, $40 awaiting payment', /<strong>2<\/strong> sales credited/.test(html) && /Awaiting payment <strong>\$40<\/strong>/.test(html));
 
   console.log('deals');
   await partner('/partners/deals', form({ match_kind: 'domain', match_value: 'greenfield.edu', label: 'Greenfield Academy' }));
@@ -107,7 +107,7 @@ async function purchase(db, slug, { cookie, email }) {
   r = await admin('/admin/payouts/create', form({ period }));
   ok('issuing again creates nothing new', db.prepare('SELECT COUNT(*) n FROM payouts').get().n === 2);
   html = await (await partner('/partners/commissions')).text();
-  ok('partner sees their statement as issued', new RegExp(`/partners/statements/${pys[0].id}`).test(html) && /\$60/.test(html) && /issued/.test(html));
+  ok('partner sees their statement as awaiting payment', new RegExp(`/partners/statements/${pys[0].id}`).test(html) && /\$60/.test(html) && /awaiting payment/.test(html));
   html = await (await partner('/partners/statements/' + pys[0].id)).text();
   ok('statement page lists the three lines and the total', (html.match(/<td>first<\/td>/g) || []).length === 3 && /<strong>\$60<\/strong>/.test(html) && !/buyer\.test|greenfield/.test(html));
   r = await partner('/partners/statements/' + pys[1].id);
@@ -117,7 +117,7 @@ async function purchase(db, slug, { cookie, email }) {
   await admin('/admin/payouts/' + pys[0].id + '/paid', form({ reference: 'TRX-1001' }));
   ok('marking paid pays its commissions and stores the reference', db.prepare("SELECT COUNT(*) n FROM commissions WHERE payout_id=? AND status='paid'").get(pys[0].id).n === 3 && db.prepare('SELECT reference FROM payouts WHERE id=?').get(pys[0].id).reference === 'TRX-1001');
   html = await (await partner('/partners')).text();
-  ok('overview now shows paid $60, owed $0', /paid \$60/.test(html) && /Owed to you <strong>\$0<\/strong>/.test(html));
+  ok('overview now shows paid out $60, awaiting $0', /Paid out to you <strong>\$60<\/strong>/.test(html) && /Awaiting payment <strong>\$0<\/strong>/.test(html));
   await admin('/admin/payouts/' + pys[1].id + '/void', { method: 'POST' });
   ok('voiding frees the commissions for a re-issue', db.prepare('SELECT status FROM payouts WHERE id=?').get(pys[1].id).status === 'void' && db.prepare("SELECT COUNT(*) n FROM commissions WHERE partner_id=2 AND payout_id IS NULL AND status='approved'").get().n === 1);
   html = await (await admin('/admin/payouts/' + pys[0].id)).text();

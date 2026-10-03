@@ -1,6 +1,6 @@
 <%- include('../partials/header') %>
-<div class="row between wrap"><h1>Statements &amp; payouts</h1><div class="row gap"><a class="btn small ghost" href="/admin/commissions">Commissions →</a><a class="btn small ghost" href="/admin/partners">Partners →</a></div></div>
-<p class="muted small">Monthly routine: wait <%= clawbackDays %> days after the month ends → Commissions → approve the month's rows → issue statements here → pay each partner by bank transfer / PayPal → mark the statement paid with the reference. Partners see their statements in the portal.</p>
+<div class="row between wrap"><h1>Payouts</h1><div class="row gap"><a class="btn small ghost" href="/admin/commissions">Commissions →</a><a class="btn small ghost" href="/admin/partners">Partners →</a></div></div>
+<p class="muted small">One statement per partner per month: what AI Ninjas owes them, paid by bank transfer or PayPal and marked paid here. Monthly routine: wait <%= clawbackDays %> days after the month ends → Commissions → approve the month's rows → issue statements here → pay each partner by bank transfer / PayPal → mark the statement paid with the reference. Partners see their statements in the portal.</p>
 
 <% if (proposed.length) { %><div class="card"><h2>Deals proposed by partners</h2>
   <table class="table"><thead><tr><th>Partner</th><th>Matches</th><th>Label / notes</th><th>Submitted</th><th></th></tr></thead><tbody>
@@ -8,8 +8,8 @@
   </tbody></table></div><% } %>
 
 <div class="card"><h2>Issue statements</h2>
-  <% if (pending.length) { %><table class="table"><thead><tr><th>Month</th><th>Partners</th><th>Approved, not yet on a statement</th><th></th></tr></thead><tbody>
-  <% pending.forEach(p => { %><tr><td><%= p.period %></td><td><%= p.partners %></td><td><%= p.display %></td><td class="actions"><form method="post" action="/admin/payouts/create" class="inline"><input type="hidden" name="period" value="<%= p.period %>"><button class="btn small">Issue statements for <%= p.period %></button></form></td></tr><% }) %>
+  <% if (pending.length) { %><table class="table"><thead><tr><th>Month</th><th>Partners with approved commissions</th><th>Total</th><th></th></tr></thead><tbody>
+  <% pending.forEach(p => { %><tr><td><%= p.period %></td><td><%= p.names %></td><td><%= p.display %></td><td class="actions"><form method="post" action="/admin/payouts/create" class="inline"><input type="hidden" name="period" value="<%= p.period %>"><button class="btn small">Issue statements for <%= p.period %></button></form></td></tr><% }) %>
   </tbody></table><% } else { %><p class="muted small">Nothing to issue: approve commissions first (Commissions → select rows → Approve).</p><% } %>
 </div>
 
