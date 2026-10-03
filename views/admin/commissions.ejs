@@ -15,7 +15,7 @@
 <% } %>
 
 <form method="post" action="/admin/commissions/status">
-<input type="hidden" name="period" value="<%= period %>">
+<input type="hidden" name="period" value="<%= period %>"><input type="hidden" name="partner" value="<%= partnerId || '' %>"><input type="hidden" name="status_filter" value="<%= status %>">
 <table class="table"><thead><tr><th></th><th>Month</th><th>Partner</th><th>Order</th><th>Kind</th><th>Basis</th><th>Rate</th><th>Amount</th><th>Status</th></tr></thead><tbody>
 <% rows.forEach(c => { %>
   <tr><td><% if (['pending','approved'].includes(c.status)) { %><input type="checkbox" name="ids" value="<%= c.id %>"><% } %></td><td><%= c.period %></td><td><a href="/admin/partners/<%= c.partner_id %>"><%= c.partner_name %></a></td>

@@ -91,7 +91,8 @@ admin.post('/commissions/status', (req, res) => {
   const status = String(req.body.status || '');
   const n = partners.bulkStatus(ids, status, { by: req.user.id });
   flash(req, n ? 'success' : 'error', n ? `${n} commission(s) marked ${status}.` : 'Nothing changed (pick rows, and only moves pending → approved → paid are allowed).');
-  res.redirect('/admin/commissions' + (req.body.period ? '?period=' + encodeURIComponent(req.body.period) : ''));
+  const back = new URLSearchParams(); if (req.body.period) back.set('period', req.body.period); if (req.body.partner) back.set('partner', req.body.partner); if (req.body.status_filter) back.set('status', req.body.status_filter);
+  res.redirect('/admin/commissions' + (back.toString() ? '?' + back : ''));
 });
 admin.post('/commissions/:id/:status', (req, res) => {
   try { partners.setCommissionStatus(req.params.id, req.params.status, { by: req.user.id }); flash(req, 'success', 'Commission marked ' + req.params.status + '.'); }
