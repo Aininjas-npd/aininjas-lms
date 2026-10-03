@@ -6,7 +6,7 @@
 <table class="table"><thead><tr><th>Partner</th><th>Code</th><th>Rates</th><th>Buyer discount</th><th>Sales</th><th>Earned</th><th>Owed</th><th>Status</th><th></th></tr></thead><tbody>
 <% partners.forEach(p => { %>
   <tr><td><a href="/admin/partners/<%= p.id %>"><strong><%= p.name %></strong></a><br><span class="muted small"><%= { agent: 'BD agent', content: 'content partner', affiliate: 'affiliate' }[p.type] || p.type %><%= p.contact_name ? ' · ' + p.contact_name : '' %><%= p.email ? ' · ' + p.email : '' %></span></td>
-    <td><code><%= p.code %></code><br><span class="muted small"><%= p.clicks %> link click<%= p.clicks === 1 ? '' : 's' %></span></td>
+    <td><% if (p.type === 'content') { %><span class="muted">—</span><% } else { %><code><%= p.code %></code><br><span class="muted small"><%= p.clicks %> link click<%= p.clicks === 1 ? '' : 's' %></span><% } %></td>
     <td class="small"><% if (p.type === 'content') { %>royalty per course — see partner page<% } else { %><%= p.rate_first %>% first · <%= p.rate_renewal %>% renewals for <%= p.renewal_months %> mo<% } %></td>
     <td class="small"><% if (p.discount_percent > 0) { %><%= p.discount_percent %>% off<% if (p.stripe_promotion_code_id) { %> <span class="badge active">live</span><% } else { %> <span class="badge pending">not in Stripe</span><% } %><% } else { %><span class="muted">none (link only)</span><% } %></td>
     <td><%= p.orders_n %></td><td><%= money(p.earned_cents, 'usd') %></td><td><%= money(p.owed_cents, 'usd') %></td>
@@ -21,7 +21,7 @@
     <% if (edit) { %><input type="hidden" name="id" value="<%= edit.id %>"><% } %>
     <div class="row gap wrap">
       <label style="flex:1">Name <span class="muted">(person or company)</span><input type="text" name="name" required value="<%= edit ? edit.name : '' %>" placeholder="e.g. Ahmed Khan / Bright Minds Tutoring"></label>
-      <label>Code <span class="muted" id="codeHint">(in links and at checkout)</span><input type="text" name="code" required pattern="[A-Za-z0-9][A-Za-z0-9-]{2,19}" value="<%= edit ? edit.code : '' %>" placeholder="AHMED20" style="width:160px;text-transform:uppercase"></label>
+      <label id="codeField">Code <span class="muted" id="codeHint">(in links and at checkout)</span><input type="text" name="code" id="codeInput" required pattern="[A-Za-z0-9][A-Za-z0-9-]{2,19}" value="<%= edit ? edit.code : '' %>" placeholder="AHMED20" style="width:160px;text-transform:uppercase"></label>
       <label>Type<select name="type" onchange="typeChanged(this)"><option value="affiliate" <%= edit && edit.type === 'affiliate' ? 'selected' : '' %>>Affiliate (links, codes)</option><option value="agent" <%= edit && edit.type === 'agent' ? 'selected' : '' %>>BD agent (registers deals)</option><option value="content" <%= edit && edit.type === 'content' ? 'selected' : '' %>>Content partner (royalty per course)</option></select></label>
     </div>
     <div class="row gap wrap">
@@ -44,7 +44,7 @@
         var f = sel.form, content = sel.value === 'content';
         document.getElementById('ratesRow').hidden = content;
         document.getElementById('contentHint').hidden = !content;
-        document.getElementById('codeHint').textContent = content ? '(an identifier, e.g. AUTHOR1)' : '(in links and at checkout)';
+        document.getElementById('codeField').hidden = content; document.getElementById('codeInput').required = !content;
         if (!content) { var d = RATE_DEFAULTS[sel.value]; f.rate_first.placeholder = d.first; f.rate_renewal.placeholder = d.renewal; }
       }
       typeChanged(document.querySelector('select[name=type]'));

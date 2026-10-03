@@ -124,7 +124,11 @@ function setStripe(fn) { stripeFn = fn; }
 
 /** Create or update a partner. Keeps the Stripe promotion code in step with discount_percent. */
 async function savePartner(input, { by } = {}) {
-  const code = String(input.code || '').trim().toUpperCase();
+  let code = String(input.code || '').trim().toUpperCase();
+  if (input.type === 'content' && !code) {   // content partners need no code; make an identifier from the name
+    const base = ('CP-' + String(input.name || '').replace(/[^A-Za-z0-9]+/g, '').slice(0, 10).toUpperCase()) || 'CP';
+    code = base; let n = 2; while (partnerByCode(code) && !(input.id && partnerByCode(code).id === +input.id)) code = base + n++;
+  }
   if (!CODE_RE.test(code)) throw new Error('Code: 3–20 capital letters, digits or dashes (e.g. AHMED20) — it goes in links and at checkout');
   const name = String(input.name || '').trim(); if (!name) throw new Error('Name is required');
   const type = ['agent', 'content'].includes(input.type) ? input.type : 'affiliate';

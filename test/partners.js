@@ -137,8 +137,9 @@ async function purchase(db, slug, { ref, cookie, email, promo } = {}) {
   ok('attribution never written to a student profile beyond partner_id/attributed_at', !db.prepare('PRAGMA table_info(users)').all().some(col => /commission|coupon|promo/.test(col.name)));
 
   console.log('content partners');
-  r = await call('/admin/partners', form({ name: 'Course Author Co', code: 'AUTHOR', type: 'content', email: 'author@partner.test' }));
-  const author = db.prepare("SELECT * FROM partners WHERE code='AUTHOR'").get();
+  r = await call('/admin/partners', form({ name: 'Course Author Co', type: 'content', email: 'author@partner.test' }));
+  const author = db.prepare("SELECT * FROM partners WHERE type='content'").get();
+  ok('content partner gets a generated identifier', author && /^CP-COURSEAUTH/.test(author.code));
   ok('content partner created with no coupon and no rates', author && author.type === 'content' && !author.stripe_promotion_code_id && author.discount_percent === 0);
   r = await call('/admin/partners/' + author.id + '/royalties', form({ course_id: '1', percent: '25' }));
   ok('royalty 25% set on Course One', db.prepare('SELECT percent FROM course_royalties WHERE course_id=1 AND partner_id=?').get(author.id).percent === 25);
