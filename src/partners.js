@@ -148,7 +148,10 @@ async function syncPromotionCode(p, previous) {
     if (p.stripe_promotion_code_id) { try { await s.promotionCodes.update(p.stripe_promotion_code_id, { active: false }); } catch {} db.prepare('UPDATE partners SET stripe_promotion_code_id=NULL WHERE id=?').run(p.id); }
     if (!wantsCode) return null;
     const coupon = await s.coupons.create({ percent_off: p.discount_percent, duration: 'once', name: `Partner ${p.code}`, metadata: { partner_id: String(p.id), partner_code: p.code } });
-    const promo = await s.promotionCodes.create({ coupon: coupon.id, code: p.code, metadata: { partner_id: String(p.id) } });
+    // Stripe API 2025-09+ takes `promotion: {type:'coupon', coupon}`; older pinned versions take `coupon`. Try new, fall back.
+    let promo;
+    try { promo = await s.promotionCodes.create({ promotion: { type: 'coupon', coupon: coupon.id }, code: p.code, metadata: { partner_id: String(p.id) } }); }
+    catch (e) { if (!/unknown parameter: promotion/i.test(e.message)) throw e; promo = await s.promotionCodes.create({ coupon: coupon.id, code: p.code, metadata: { partner_id: String(p.id) } }); }
     db.prepare('UPDATE partners SET stripe_coupon_id=?, stripe_promotion_code_id=? WHERE id=?').run(coupon.id, promo.id, p.id);
     return null;
   } catch (e) { return 'Stripe refused the coupon code: ' + e.message; }
