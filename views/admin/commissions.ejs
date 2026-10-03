@@ -18,13 +18,25 @@
 <input type="hidden" name="period" value="<%= period %>"><input type="hidden" name="partner" value="<%= partnerId || '' %>"><input type="hidden" name="status_filter" value="<%= status %>">
 <table class="table"><thead><tr><th></th><th>Month</th><th>Partner</th><th>Order</th><th>Kind</th><th>Basis</th><th>Rate</th><th>Amount</th><th>Status</th></tr></thead><tbody>
 <% rows.forEach(c => { %>
-  <tr><td><% if (['pending','approved'].includes(c.status)) { %><input type="checkbox" name="ids" value="<%= c.id %>"><% } %></td><td><%= c.period %></td><td><a href="/admin/partners/<%= c.partner_id %>"><%= c.partner_name %></a></td>
+  <tr><td><% if (['pending','approved'].includes(c.status)) { %><input type="checkbox" name="ids" value="<%= c.id %>" data-status="<%= c.status %>" onchange="syncBulk()"><% } %></td><td><%= c.period %></td><td><a href="/admin/partners/<%= c.partner_id %>"><%= c.partner_name %></a></td>
     <td class="small">#<%= c.order_id %> <%= c.product_slug || '' %><br><span class="muted"><%= c.buyer_email || '' %> · <%= c.attribution || '' %><%= c.paid_at ? ' · ' + c.paid_at.slice(0, 10) : '' %></span></td>
     <td><%= c.kind %></td><td><%= money(c.basis_cents, c.currency) %></td><td><%= c.rate %>%</td><td><strong><%= c.display %></strong></td>
     <td><span class="badge <%= c.status === 'paid' ? 'active' : (c.status === 'reversed' ? 'disabled' : 'pending') %>"><%= c.status %></span><% if (c.note) { %><br><span class="muted small"><%= c.note %></span><% } %></td></tr>
 <% }) %>
 <% if (!rows.length) { %><tr><td colspan="9" class="muted">No commissions match.</td></tr><% } %>
 </tbody></table>
-<% if (rows.some(c => ['pending','approved'].includes(c.status))) { %><p class="row gap"><span class="small muted">Selected rows:</span><button class="btn small" name="status" value="approved">Approve</button><button class="btn small" name="status" value="paid">Mark paid</button><button class="btn small ghost" name="status" value="reversed" onclick="return confirm('Reverse the selected commissions? Use this for a refund outside the automatic window.')">Reverse</button></p><% } %>
+<% if (rows.some(c => ['pending','approved'].includes(c.status))) { %><p class="row gap"><span class="small muted">Selected rows:</span><button class="btn small" name="status" value="approved" id="bulkApprove" disabled title="Select pending rows">Approve</button><button class="btn small" name="status" value="paid" id="bulkPaid" disabled title="Select approved rows">Mark paid</button><button class="btn small ghost" name="status" value="reversed" id="bulkReverse" disabled onclick="return confirm('Reverse the selected commissions? Use this for a refund outside the automatic window.')">Reverse</button></p>
+<script>
+  // Only offer the moves the selected rows can make: pending → approved, approved → paid, either → reversed.
+  function syncBulk() {
+    var sel = Array.prototype.slice.call(document.querySelectorAll('input[name=ids]:checked')).map(function (i) { return i.dataset.status; });
+    var allPending = sel.length && sel.every(function (s) { return s === 'pending'; });
+    var allApproved = sel.length && sel.every(function (s) { return s === 'approved'; });
+    document.getElementById('bulkApprove').disabled = !allPending;
+    document.getElementById('bulkPaid').disabled = !allApproved;
+    document.getElementById('bulkReverse').disabled = !sel.length;
+  }
+  syncBulk();
+</script><% } %>
 </form>
 <%- include('../partials/footer') %>
