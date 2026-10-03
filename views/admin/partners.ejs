@@ -21,22 +21,34 @@
     <% if (edit) { %><input type="hidden" name="id" value="<%= edit.id %>"><% } %>
     <div class="row gap wrap">
       <label style="flex:1">Name <span class="muted">(person or company)</span><input type="text" name="name" required value="<%= edit ? edit.name : '' %>" placeholder="e.g. Ahmed Khan / Bright Minds Tutoring"></label>
-      <label>Code <span class="muted">(in links and at checkout)</span><input type="text" name="code" required pattern="[A-Za-z0-9][A-Za-z0-9-]{2,19}" value="<%= edit ? edit.code : '' %>" placeholder="AHMED20" style="width:160px;text-transform:uppercase"></label>
-      <label>Type<select name="type" onchange="var d=<%- JSON.stringify(defaults) %>[this.value];this.form.rate_first.placeholder=d.first;this.form.rate_renewal.placeholder=d.renewal"><option value="affiliate" <%= edit && edit.type === 'affiliate' ? 'selected' : '' %>>Affiliate (links, codes)</option><option value="agent" <%= edit && edit.type === 'agent' ? 'selected' : '' %>>BD agent (registers deals)</option><option value="content" <%= edit && edit.type === 'content' ? 'selected' : '' %>>Content partner (royalty per course)</option></select></label>
+      <label>Code <span class="muted" id="codeHint">(in links and at checkout)</span><input type="text" name="code" required pattern="[A-Za-z0-9][A-Za-z0-9-]{2,19}" value="<%= edit ? edit.code : '' %>" placeholder="AHMED20" style="width:160px;text-transform:uppercase"></label>
+      <label>Type<select name="type" onchange="typeChanged(this)"><option value="affiliate" <%= edit && edit.type === 'affiliate' ? 'selected' : '' %>>Affiliate (links, codes)</option><option value="agent" <%= edit && edit.type === 'agent' ? 'selected' : '' %>>BD agent (registers deals)</option><option value="content" <%= edit && edit.type === 'content' ? 'selected' : '' %>>Content partner (royalty per course)</option></select></label>
     </div>
     <div class="row gap wrap">
       <label>Contact name<input type="text" name="contact_name" value="<%= edit ? (edit.contact_name || '') : '' %>"></label>
       <label style="flex:1">Partner email <span class="muted">(their own purchases are not commissioned)</span><input type="email" name="email" value="<%= edit ? (edit.email || '') : '' %>"></label>
     </div>
-    <div class="row gap wrap">
+    <div class="row gap wrap" id="ratesRow">
       <label>First payment %<input type="number" step="0.5" min="0" max="100" name="rate_first" value="<%= edit ? edit.rate_first : '' %>" placeholder="<%= defaults.affiliate.first %>" style="width:110px"></label>
       <label>Renewal %<input type="number" step="0.5" min="0" max="100" name="rate_renewal" value="<%= edit ? edit.rate_renewal : '' %>" placeholder="<%= defaults.affiliate.renewal %>" style="width:110px"></label>
       <label>Renewals paid for (months)<input type="number" min="0" max="120" name="renewal_months" value="<%= edit ? edit.renewal_months : 12 %>" style="width:110px"></label>
       <label>Buyer discount % <span class="muted">(0 = link only, no coupon)</span><input type="number" step="0.5" min="0" max="100" name="discount_percent" value="<%= edit ? edit.discount_percent : 0 %>" style="width:110px"></label>
-      <label>Status<select name="status"><% ['active','paused','ended'].forEach(s => { %><option value="<%= s %>" <%= edit && edit.status === s ? 'selected' : '' %>><%= s %></option><% }) %></select></label>
     </div>
+    <div class="row gap wrap"><label>Status<select name="status"><% ['active','paused','ended'].forEach(s => { %><option value="<%= s %>" <%= edit && edit.status === s ? 'selected' : '' %>><%= s %></option><% }) %></select></label>
+      <p class="muted small" id="contentHint" hidden>Content partners earn royalties per course, set on their page after saving; rates, renewals and buyer discounts do not apply.</p></div>
     <label>Notes <span class="muted">(agreement date, payout details go in Phase 3)</span><textarea name="notes" rows="2"><%= edit ? (edit.notes || '') : '' %></textarea></label>
     <p class="muted small">Blank rates use the defaults for the type: affiliates <%= defaults.affiliate.first %>% / <%= defaults.affiliate.renewal %>%, BD agents <%= defaults.agent.first %>% / <%= defaults.agent.renewal %>%. A buyer discount creates a Stripe coupon code equal to the partner code (first payment only); a commission is calculated on what the buyer actually paid.</p>
+    <script>
+      var RATE_DEFAULTS = <%- JSON.stringify(defaults) %>;
+      function typeChanged(sel) {
+        var f = sel.form, content = sel.value === 'content';
+        document.getElementById('ratesRow').hidden = content;
+        document.getElementById('contentHint').hidden = !content;
+        document.getElementById('codeHint').textContent = content ? '(an identifier, e.g. AUTHOR1)' : '(in links and at checkout)';
+        if (!content) { var d = RATE_DEFAULTS[sel.value]; f.rate_first.placeholder = d.first; f.rate_renewal.placeholder = d.renewal; }
+      }
+      typeChanged(document.querySelector('select[name=type]'));
+    </script>
     <p><button class="btn"><%= edit ? 'Save changes' : 'Create partner' %></button> <% if (edit) { %><a class="btn ghost" href="/admin/partners">Cancel</a><% } %></p>
   </form>
 </details>
