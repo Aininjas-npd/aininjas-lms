@@ -9,8 +9,8 @@
 </form>
 
 <% if (summary.length) { %>
-<table class="table" style="margin-bottom:18px"><thead><tr><th>Month</th><th>Partner</th><th>Rows</th><th>Pending</th><th>Approved</th><th>Paid</th></tr></thead><tbody>
-<% summary.forEach(s => { %><tr><td><%= s.period %></td><td><a href="/admin/partners/<%= s.partner_id %>"><%= s.partner_name %></a> <span class="muted small"><%= s.partner_code %></span></td><td><%= s.n %></td><td><%= money(s.pending_cents, 'usd') %></td><td><%= money(s.approved_cents, 'usd') %></td><td><%= money(s.paid_cents, 'usd') %></td></tr><% }) %>
+<table class="table" style="margin-bottom:18px"><thead><tr><th>Month</th><th>Partner</th><th>Rows</th><th>Net earned</th><th>Reversed</th><th>Pending</th><th>Approved</th><th>Paid</th></tr></thead><tbody>
+<% summary.forEach(s => { %><tr><td><%= s.period %></td><td><a href="/admin/partners/<%= s.partner_id %>"><%= s.partner_name %></a> <span class="muted small"><%= s.partner_code %></span></td><td><%= s.n %></td><td><strong><%= money(s.net_cents, 'usd') %></strong></td><td class="muted"><%= s.reversed_cents ? '−' + money(s.reversed_cents, 'usd') : '—' %></td><td><%= money(s.pending_cents, 'usd') %></td><td><%= money(s.approved_cents, 'usd') %></td><td><%= money(s.paid_cents, 'usd') %></td></tr><% }) %>
 </tbody></table>
 <% } %>
 

@@ -278,10 +278,19 @@ function listCommissions({ partnerId, period: per, status } = {}) {
   return db.prepare(`SELECT c.*, p.name partner_name, p.code partner_code, o.product_slug, o.buyer_email, o.attribution, o.paid_at FROM commissions c JOIN partners p ON p.id=c.partner_id LEFT JOIN orders o ON o.id=c.order_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY c.period DESC, c.id DESC`).all(...args);
 }
 /** Per partner per month: what is pending, approved, paid. */
-const summary = ({ period: per } = {}) => db.prepare(`SELECT c.period, p.id partner_id, p.name partner_name, p.code partner_code, p.type,
-  SUM(CASE WHEN c.status='pending' THEN c.amount_cents ELSE 0 END) pending_cents, SUM(CASE WHEN c.status='approved' THEN c.amount_cents ELSE 0 END) approved_cents,
-  SUM(CASE WHEN c.status='paid' THEN c.amount_cents ELSE 0 END) paid_cents, COUNT(*) n
-  FROM commissions c JOIN partners p ON p.id=c.partner_id ${per ? 'WHERE c.period=?' : ''} GROUP BY c.period, p.id ORDER BY c.period DESC, p.name`).all(...(per ? [per] : []));
+/** Per partner per month: earned (gross of everything not reversed), reversed, and what is pending / approved / paid. */
+function summary({ period: per, partnerId, status } = {}) {
+  const where = [], args = [];
+  if (per) { where.push('c.period=?'); args.push(per); }
+  if (partnerId) { where.push('c.partner_id=?'); args.push(partnerId); }
+  if (status) { where.push('c.status=?'); args.push(status); }
+  return db.prepare(`SELECT c.period, p.id partner_id, p.name partner_name, p.code partner_code, p.type,
+    SUM(CASE WHEN c.status<>'reversed' THEN c.amount_cents ELSE 0 END) net_cents,
+    SUM(CASE WHEN c.status='reversed' THEN c.amount_cents ELSE 0 END) reversed_cents,
+    SUM(CASE WHEN c.status='pending' THEN c.amount_cents ELSE 0 END) pending_cents, SUM(CASE WHEN c.status='approved' THEN c.amount_cents ELSE 0 END) approved_cents,
+    SUM(CASE WHEN c.status='paid' THEN c.amount_cents ELSE 0 END) paid_cents, COUNT(*) n
+    FROM commissions c JOIN partners p ON p.id=c.partner_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} GROUP BY c.period, p.id ORDER BY c.period DESC, p.name`).all(...args);
+}
 const periods = () => db.prepare('SELECT DISTINCT period FROM commissions ORDER BY period DESC').all().map(r => r.period);
 
 /** Orders attributed to one partner. */

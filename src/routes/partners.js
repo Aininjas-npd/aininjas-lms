@@ -84,7 +84,7 @@ admin.get('/commissions', (req, res) => {
   const per = String(req.query.period || ''), status = String(req.query.status || ''), partnerId = +req.query.partner || null;
   const rows = partners.listCommissions({ period: per || null, status: status || null, partnerId }).map(c => ({ ...c, display: money(c.amount_cents, c.currency) }));
   if (req.query.format === 'csv') { res.set('Content-Type', 'text/csv'); res.set('Content-Disposition', `attachment; filename="commissions${per ? '-' + per : ''}.csv"`); return res.send(partners.csv(rows)); }
-  res.render('admin/commissions', { title: 'Commissions', rows, summary: partners.summary({ period: per || null }), periods: partners.periods(), period: per, status, partnerId, partnersList: partners.listPartners(), money, clawbackDays: partners.CLAWBACK_DAYS });
+  res.render('admin/commissions', { title: 'Commissions', rows, summary: partners.summary({ period: per || null, partnerId, status: status || null }), periods: partners.periods(), period: per, status, partnerId, partnersList: partners.listPartners(), money, clawbackDays: partners.CLAWBACK_DAYS });
 });
 admin.post('/commissions/status', (req, res) => {
   const ids = [].concat(req.body.ids || []).map(Number).filter(Boolean);
