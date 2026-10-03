@@ -35,16 +35,16 @@
       <label>Buyer discount % <span class="muted">(0 = link only, no coupon)</span><input type="number" step="0.5" min="0" max="100" name="discount_percent" value="<%= edit ? edit.discount_percent : 0 %>" style="width:110px"></label>
     </div>
     <div class="row gap wrap"><label>Status<select name="status"><% ['active','paused','ended'].forEach(s => { %><option value="<%= s %>" <%= edit && edit.status === s ? 'selected' : '' %>><%= s %></option><% }) %></select></label>
-      <p class="muted small" id="contentHint" hidden>Content partners earn royalties per course, set on their page after saving; rates, renewals and buyer discounts do not apply.</p></div>
+      <p class="muted small" id="contentHint" style="display:none">Content partners earn royalties per course, set on their page after saving; rates, renewals and buyer discounts do not apply.</p></div>
     <label>Notes <span class="muted">(agreement date, payout details go in Phase 3)</span><textarea name="notes" rows="2"><%= edit ? (edit.notes || '') : '' %></textarea></label>
     <p class="muted small">Blank rates use the defaults for the type: affiliates <%= defaults.affiliate.first %>% / <%= defaults.affiliate.renewal %>%, BD agents <%= defaults.agent.first %>% / <%= defaults.agent.renewal %>%. A buyer discount creates a Stripe coupon code equal to the partner code (first payment only); a commission is calculated on what the buyer actually paid.</p>
     <script>
       var RATE_DEFAULTS = <%- JSON.stringify(defaults) %>;
       function typeChanged(sel) {
         var f = sel.form, content = sel.value === 'content';
-        document.getElementById('ratesRow').hidden = content;
-        document.getElementById('contentHint').hidden = !content;
-        document.getElementById('codeField').hidden = content; document.getElementById('codeInput').required = !content;
+        document.getElementById('ratesRow').style.display = content ? 'none' : '';
+        document.getElementById('contentHint').style.display = content ? '' : 'none';
+        document.getElementById('codeField').style.display = content ? 'none' : ''; document.getElementById('codeInput').required = !content;
         if (!content) { var d = RATE_DEFAULTS[sel.value]; f.rate_first.placeholder = d.first; f.rate_renewal.placeholder = d.renewal; }
       }
       typeChanged(document.querySelector('select[name=type]'));
