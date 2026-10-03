@@ -268,6 +268,12 @@ Attachments follow the step's audience: files on a teachers-only step cannot be 
   renewal rate until `renewal_months` after the first sale.
 - Deleting a user (Accounts → Delete everywhere) keeps their orders as financial records but strips the name, email
   and user link from them.
+- **Content partners** (type *content*): the authors of courses. On their partner page, assign courses with a royalty
+  percentage. Every paid order (and every renewal, with no time limit) of a product granting that course books a
+  *royalty* commission row: the net sale (amount paid after discounts, minus tax) is split equally across the
+  product's courses and the royalty % applies to the course's share, whoever sold it (house, affiliate or agent).
+  Refund clawback, statements and the portal work as for other partners; a content partner's portal shows royalties
+  per course with no buyer or seller identity. Admin → Products shows what each product pays away in royalties.
 
 ## Partner portal and statements (Phase 3)
 

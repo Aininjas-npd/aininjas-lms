@@ -56,7 +56,8 @@ admin.get('/partners/:id', (req, res) => {
   const commissions = partners.listCommissions({ partnerId: p.id }).map(c => ({ ...c, display: money(c.amount_cents, c.currency) }));
   const totals = { earned: commissions.filter(c => c.status !== 'reversed').reduce((s, c) => s + c.amount_cents, 0), owed: commissions.filter(c => ['pending', 'approved'].includes(c.status)).reduce((s, c) => s + c.amount_cents, 0), paid: commissions.filter(c => c.status === 'paid').reduce((s, c) => s + c.amount_cents, 0) };
   const schools = db.prepare("SELECT DISTINCT school_slug FROM users WHERE school_slug IS NOT NULL ORDER BY 1").all().map(r => r.school_slug);
-  res.render('admin/partner', { title: p.name, p: { ...p, ...partners.linkFor(p, BASE_URL) }, orders, commissions, totals, deals: partners.listDeals(p.id), schools, dealDays: partners.DEAL_DAYS, products: commerce.listProducts({ onSale: true }).filter(x => x.kind !== 'seat'), money, stripeDash: commerce.testMode() ? 'https://dashboard.stripe.com/test' : 'https://dashboard.stripe.com' });
+  const allCourses = db.prepare('SELECT id, title, slug FROM courses WHERE superseded_by IS NULL ORDER BY title').all();
+  res.render('admin/partner', { title: p.name, p: { ...p, ...partners.linkFor(p, BASE_URL) }, orders, commissions, totals, deals: partners.listDeals(p.id), schools, dealDays: partners.DEAL_DAYS, products: commerce.listProducts({ onSale: true }).filter(x => x.kind !== 'seat'), royalties: p.type === 'content' ? partners.royaltiesForPartner(p.id) : [], allCourses, money, stripeDash: commerce.testMode() ? 'https://dashboard.stripe.com/test' : 'https://dashboard.stripe.com' });
 });
 admin.post('/partners/:id/deals', (req, res) => {
   try { const d = partners.registerDeal(req.params.id, req.body); flash(req, 'success', `Deal registered (${d.match_kind}: ${d.match_value}) until ${d.expires_at.slice(0, 10)}.`); }
@@ -73,6 +74,12 @@ admin.post('/partners/:id/deals/:dealId/:status', (req, res) => {
   catch (e) { flash(req, 'error', e.message); }
   res.redirect('/admin/partners/' + req.params.id);
 });
+admin.post('/partners/:id/royalties', (req, res) => {
+  try { partners.setCourseRoyalty(+req.body.course_id, +req.params.id, req.body.percent); flash(req, 'success', 'Royalty saved.'); }
+  catch (e) { flash(req, 'error', e.message); }
+  res.redirect('/admin/partners/' + req.params.id);
+});
+admin.post('/partners/:id/royalties/:courseId/remove', (req, res) => { partners.removeCourseRoyalty(+req.params.courseId, +req.params.id); flash(req, 'success', 'Royalty removed.'); res.redirect('/admin/partners/' + req.params.id); });
 admin.post('/partners/:id/sync-code', async (req, res) => {
   const p = partners.partnerById(req.params.id); if (!p) return res.sendStatus(404);
   const w = await partners.syncPromotionCode(p, null);
@@ -81,17 +88,17 @@ admin.post('/partners/:id/sync-code', async (req, res) => {
 });
 
 admin.get('/commissions', (req, res) => {
-  const per = String(req.query.period || ''), status = String(req.query.status || ''), partnerId = +req.query.partner || null;
-  const rows = partners.listCommissions({ period: per || null, status: status || null, partnerId }).map(c => ({ ...c, display: money(c.amount_cents, c.currency) }));
+  const per = String(req.query.period || ''), status = String(req.query.status || ''), partnerId = +req.query.partner || null, kind = ['sales', 'royalty'].includes(req.query.kind) ? req.query.kind : '';
+  const rows = partners.listCommissions({ period: per || null, status: status || null, partnerId, kind }).map(c => ({ ...c, display: money(c.amount_cents, c.currency) }));
   if (req.query.format === 'csv') { res.set('Content-Type', 'text/csv'); res.set('Content-Disposition', `attachment; filename="commissions${per ? '-' + per : ''}.csv"`); return res.send(partners.csv(rows)); }
-  res.render('admin/commissions', { title: 'Commissions', rows, summary: partners.summary({ period: per || null, partnerId, status: status || null }), periods: partners.periods(), period: per, status, partnerId, partnersList: partners.listPartners(), money, clawbackDays: partners.CLAWBACK_DAYS });
+  res.render('admin/commissions', { title: 'Commissions', rows, summary: partners.summary({ period: per || null, partnerId, status: status || null, kind }), periods: partners.periods(), period: per, status, kind, partnerId, partnersList: partners.listPartners(), money, clawbackDays: partners.CLAWBACK_DAYS });
 });
 admin.post('/commissions/status', (req, res) => {
   const ids = [].concat(req.body.ids || []).map(Number).filter(Boolean);
   const status = String(req.body.status || '');
   const n = partners.bulkStatus(ids, status, { by: req.user.id });
   flash(req, n ? 'success' : 'error', n ? `${n} commission(s) marked ${status}.` : 'Nothing changed (pick rows, and only moves pending → approved → paid are allowed).');
-  const back = new URLSearchParams(); if (req.body.period) back.set('period', req.body.period); if (req.body.partner) back.set('partner', req.body.partner); if (req.body.status_filter) back.set('status', req.body.status_filter);
+  const back = new URLSearchParams(); if (req.body.period) back.set('period', req.body.period); if (req.body.partner) back.set('partner', req.body.partner); if (req.body.status_filter) back.set('status', req.body.status_filter); if (req.body.kind) back.set('kind', req.body.kind);
   res.redirect('/admin/commissions' + (back.toString() ? '?' + back : ''));
 });
 admin.post('/commissions/:id/:status', (req, res) => {
@@ -136,7 +143,7 @@ portal.use(requireLogin, (req, res, next) => {
   const p = partners.linkUser(req.user) || partners.partnerByUser(req.user);
   if (!p) return res.status(403).render('error', { title: 'No partner record', message: 'Your account has the partner role but no partner record uses your email. Write to partners@aininjas.com.' });
   if (p.status === 'ended') return res.status(403).render('error', { title: 'Partnership ended', message: 'This partnership has ended. Write to partners@aininjas.com if you think this is a mistake.' });
-  req.partner = { ...p, ...partners.linkFor(p, BASE_URL) }; res.locals.partner = req.partner;
+  req.partner = { ...p, ...partners.linkFor(p, BASE_URL) }; res.locals.partner = req.partner; req.user.partner_type = p.type;
   if (!p.terms_accepted_at && !/^\/terms/.test(req.path)) return res.redirect('/partners/terms');
   next();
 });
@@ -144,10 +151,12 @@ portal.get('/terms', (req, res) => res.render('partners/terms', { title: 'Partne
 portal.post('/terms', (req, res) => { if (req.body.accept === 'on') { partners.acceptTerms(req.partner); flash(req, 'success', 'Thank you — welcome to the programme.'); return res.redirect('/partners'); } flash(req, 'error', 'Please tick the box to accept the terms.'); res.redirect('/partners/terms'); });
 portal.get('/', (req, res) => {
   const stats = partners.partnerStats(req.partner.id);
+  if (req.partner.type === 'content') { const recent = partners.partnerRoyaltySales(req.partner.id).slice(0, 8).map(r => ({ ...r, display: money(r.amount_cents, r.currency), share: money(r.basis_cents, r.currency) })); return res.render('partners/content-home', { title: 'Content partner overview', stats, recent, courses: partners.royaltiesForPartner(req.partner.id), money, clawbackDays: partners.CLAWBACK_DAYS }); }
   const recent = partners.partnerSales(req.partner.id).slice(0, 8).map(o => ({ ...o, display: money(o.amount_cents, o.currency), cdisplay: o.commission_cents != null ? money(o.commission_cents, o.currency) : null }));
   res.render('partners/home', { title: 'Partner overview', stats, recent, money, products: commerce.listProducts({ onSale: true }).filter(x => x.kind !== 'seat'), windowDays: partners.WINDOW_DAYS, clawbackDays: partners.CLAWBACK_DAYS });
 });
 portal.get('/sales', (req, res) => {
+  if (req.partner.type === 'content') { const sales = partners.partnerRoyaltySales(req.partner.id).map(r => ({ ...r, display: money(r.amount_cents, r.currency), share: money(r.basis_cents, r.currency) })); return res.render('partners/content-sales', { title: 'Your royalties', sales, money }); }
   const sales = partners.partnerSales(req.partner.id).map(o => ({ ...o, display: money(o.amount_cents, o.currency), cdisplay: o.commission_cents != null ? money(o.commission_cents, o.currency) : null }));
   res.render('partners/sales', { title: 'Your sales', sales, money });
 });
@@ -162,7 +171,7 @@ portal.get('/statements/:id', (req, res) => {
   if (req.query.format === 'csv') { res.set('Content-Type', 'text/csv'); res.set('Content-Disposition', `attachment; filename="statement-${py.period}.csv"`); return res.send(partners.csv(lines.map(l => ({ ...l, partner_code: py.partner_code, partner_name: py.partner_name })))); }
   res.render('partners/statement', { title: `Statement ${py.period}`, py: { ...py, display: money(py.amount_cents, py.currency) }, lines, money, adminView: false, company: process.env.COMPANY_NAME || 'Neuralpath Dynamics Inc (AI Ninjas)' });
 });
-portal.get('/deals', (req, res) => res.render('partners/deals', { title: 'Your deals', deals: partners.listDeals(req.partner.id), dealDays: partners.DEAL_DAYS, isAgent: req.partner.type === 'agent' }));
+portal.get('/deals', (req, res) => req.partner.type === 'content' ? res.redirect('/partners') : res.render('partners/deals', { title: 'Your deals', deals: partners.listDeals(req.partner.id), dealDays: partners.DEAL_DAYS, isAgent: req.partner.type === 'agent' }));
 portal.post('/deals', (req, res) => {
   try { const d = partners.registerDeal(req.partner.id, { ...req.body, days: undefined }, { source: 'partner' }); flash(req, 'success', `Deal submitted (${d.match_kind}: ${d.match_value}). AI Ninjas will confirm it; until then it is marked proposed.`); }
   catch (e) { flash(req, 'error', e.message); }

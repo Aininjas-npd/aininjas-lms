@@ -81,7 +81,8 @@ admin.use(requireAdmin);
 
 admin.get('/products', (req, res) => {
   const courses = db.prepare('SELECT id, title, slug, is_published, superseded_by FROM courses ORDER BY title').all();
-  const products = commerce.listProducts().map(p => ({ ...p, courseTitles: commerce.coursesFor(p).map(id => (courses.find(c => c.id === id) || {}).title).filter(Boolean), display: commerce.formatMoney(p.amount_cents, p.currency) }));
+  const partners = require('../partners');
+  const products = commerce.listProducts().map(p => ({ ...p, courseTitles: commerce.coursesFor(p).map(id => (courses.find(c => c.id === id) || {}).title).filter(Boolean), display: commerce.formatMoney(p.amount_cents, p.currency), royaltyPct: partners.productRoyaltyPercent(commerce.coursesFor(p)) }));
   const edit = req.query.edit ? commerce.productById(req.query.edit) : null;
   res.render('admin/products', { title: 'Products', products, courses: courses.filter(c => !c.superseded_by), edit, stripe: { configured: commerce.configured(), test: commerce.testMode(), webhook: !!process.env.STRIPE_WEBHOOK_SECRET, tax: process.env.STRIPE_TAX === '1' }, catalogUrl: (process.env.BASE_URL || '') + '/api/catalog' });
 });

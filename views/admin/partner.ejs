@@ -1,19 +1,33 @@
 <%- include('../partials/header') %>
 <div class="row between wrap"><h1><%= p.name %> <span class="badge <%= p.status === 'active' ? 'active' : (p.status === 'paused' ? 'pending' : 'disabled') %>"><%= p.status %></span></h1><div class="row gap"><a class="btn small ghost" href="/admin/partners">← All partners</a><a class="btn small ghost" href="/admin/partners?edit=<%= p.id %>#new">✎ Edit</a><% if (p.user_id) { %><span class="badge active" title="Has a portal account">portal</span><% } else if (p.email) { %><form method="post" action="/admin/partners/<%= p.id %>/invite" class="inline"><button class="btn small" title="Create their partner account through Accounts and email the invitation">Invite to portal</button></form><% } %></div></div>
-<p class="muted small"><%= p.type === 'agent' ? 'Business-development agent' : 'Affiliate' %> · code <code><%= p.code %></code> · <%= p.rate_first %>% of the first payment, <%= p.rate_renewal %>% of renewals for <%= p.renewal_months %> months<%= p.contact_name ? ' · ' + p.contact_name : '' %><%= p.email ? ' · ' + p.email : '' %></p>
+<p class="muted small"><%= { agent: 'Business-development agent', content: 'Content partner', affiliate: 'Affiliate' }[p.type] %> · code <code><%= p.code %></code><% if (p.type === 'content') { %> · royalties per course below, on every sale and renewal, whoever sold it<% } else { %> · <%= p.rate_first %>% of the first payment, <%= p.rate_renewal %>% of renewals for <%= p.renewal_months %> months<% } %><%= p.contact_name ? ' · ' + p.contact_name : '' %><%= p.email ? ' · ' + p.email : '' %></p>
 
+<% if (p.type === 'content') { %>
+<div class="card"><h2>Courses and royalties</h2>
+  <p class="muted small">A product's net sale (after discounts, before tax) is split equally across the courses it grants; this partner earns the percentage below of their course's share, on every sale and renewal, whoever sold it. Example: a $300 net sale of a 3-course bundle gives each course $100; a 25% royalty pays $25.</p>
+  <table class="table"><thead><tr><th>Course</th><th>Royalty</th><th></th></tr></thead><tbody>
+  <% royalties.forEach(r => { %><tr><td><%= r.course_title %> <span class="muted small"><%= r.course_slug %></span></td><td><strong><%= r.percent %>%</strong> of the course's share</td><td class="actions"><form method="post" action="/admin/partners/<%= p.id %>/royalties/<%= r.course_id %>/remove" class="inline"><button class="link small" onclick="return confirm('Remove this royalty? Royalties already booked stay in the ledger.')">remove</button></form></td></tr><% }) %>
+  <% if (!royalties.length) { %><tr><td colspan="3" class="muted">No courses yet — add one below.</td></tr><% } %>
+  </tbody></table>
+  <form method="post" action="/admin/partners/<%= p.id %>/royalties" class="row gap wrap" style="margin-top:10px">
+    <label style="flex:1">Course<select name="course_id" required><option value="">Pick a course</option><% allCourses.forEach(c => { %><option value="<%= c.id %>"><%= c.title %></option><% }) %></select></label>
+    <label>Royalty %<input type="number" name="percent" step="0.5" min="0.5" max="100" required style="width:110px" placeholder="25"></label>
+    <button class="btn small">Save royalty</button>
+  </form>
+</div>
+<% } %>
 <div class="row gap wrap" style="align-items:stretch">
-  <div class="card" style="flex:1;min-width:280px"><h2>Share with the partner</h2>
+  <% if (p.type !== 'content') { %>  <div class="card" style="flex:1;min-width:280px"><h2>Share with the partner</h2>
     <p class="small">Referral link: <code><%= p.link %></code><br><span class="muted">forwards to <%= p.landing %> and credits sales for <%= p.clicks %> click<%= p.clicks === 1 ? '' : 's' %> so far</span></p>
     <% if (products.length) { %><p class="small muted">Straight to a checkout: <% products.forEach(x => { %><code><%= p.link %>?to=<%= x.slug %></code> <% }) %></p><% } %>
     <p class="small">Coupon code at checkout: <% if (p.discount_percent > 0) { %><code><%= p.code %></code> = <%= p.discount_percent %>% off the first payment <% if (p.stripe_promotion_code_id) { %><span class="badge active">live in Stripe</span><% } else { %><span class="badge pending">not in Stripe yet</span> <form method="post" action="/admin/partners/<%= p.id %>/sync-code" class="inline"><button class="link small">create it now</button></form><% } %><% } else { %><span class="muted">none — this partner is credited by link or registered deal only</span><% } %></p>
-  </div>
+  </div><% } %>
   <div class="card" style="flex:1;min-width:280px"><h2>Ledger</h2>
     <p class="small"><% if (p.payout_details) { %>Pays out to: <%= p.payout_details %><br><% } %>Earned <strong><%= money(totals.earned, 'usd') %></strong> · owed (pending + approved) <strong><%= money(totals.owed, 'usd') %></strong> · paid <strong><%= money(totals.paid, 'usd') %></strong><br><span class="muted"><%= orders.length %> attributed order<%= orders.length === 1 ? '' : 's' %> · <a href="/admin/commissions?partner=<%= p.id %>">all commissions</a></span></p>
   </div>
 </div>
 
-<div class="card"><h2>Registered deals</h2>
+<% if (p.type !== 'content') { %><div class="card"><h2>Registered deals</h2>
   <p class="muted small">For sales the partner introduces by hand (a school, a parent they are talking to). A registered deal beats a coupon code or a link, so two partners cannot both claim the same buyer. Expires after <%= dealDays %> days unless won.</p>
   <table class="table"><thead><tr><th>Matches</th><th>Label</th><th>Registered</th><th>Expires</th><th>Status</th><th></th></tr></thead><tbody>
   <% deals.forEach(d => { %>
@@ -30,12 +44,12 @@
     <label>Days<input type="number" name="days" min="1" value="<%= dealDays %>" style="width:80px"></label>
     <button class="btn small">Register deal</button>
   </form>
-</div>
+</div><% } %>
 
-<div class="card"><h2>Commissions</h2>
+<div class="card"><h2><%= p.type === 'content' ? 'Royalties' : 'Commissions' %></h2>
   <table class="table"><thead><tr><th>Month</th><th>Order</th><th>Kind</th><th>Basis</th><th>Rate</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>
   <% commissions.forEach(c => { %>
-    <tr><td><%= c.period %></td><td class="small">#<%= c.order_id %> <%= c.product_slug || '' %><br><span class="muted"><%= c.buyer_email || '' %> · <%= c.attribution || '' %></span></td><td><%= c.kind %></td><td><%= money(c.basis_cents, c.currency) %></td><td><%= c.rate %>%</td><td><strong><%= c.display %></strong></td>
+    <tr><td><%= c.period %></td><td class="small">#<%= c.order_id %> <%= c.product_slug || '' %><%= c.course_title ? ' · ' + c.course_title : '' %><br><span class="muted"><%= c.buyer_email || '' %> · <%= c.attribution || '' %></span></td><td><%= c.kind %></td><td><%= money(c.basis_cents, c.currency) %></td><td><%= c.rate %>%</td><td><strong><%= c.display %></strong></td>
       <td><span class="badge <%= c.status === 'paid' ? 'active' : (c.status === 'reversed' ? 'disabled' : 'pending') %>"><%= c.status %></span><% if (c.note) { %><br><span class="muted small"><%= c.note %></span><% } %></td>
       <td class="actions"><% if (c.status === 'pending') { %><form method="post" action="/admin/commissions/<%= c.id %>/approved" class="inline"><button class="link small">approve</button></form><% } else if (c.status === 'approved') { %><form method="post" action="/admin/commissions/<%= c.id %>/paid" class="inline"><button class="link small">mark paid</button></form><% } %></td></tr>
   <% }) %>
@@ -43,12 +57,12 @@
   </tbody></table>
 </div>
 
-<div class="card"><h2>Attributed orders</h2>
+<% if (p.type !== 'content') { %><div class="card"><h2>Attributed orders</h2>
   <table class="table"><thead><tr><th>#</th><th>When</th><th>Buyer</th><th>Product</th><th>Amount</th><th>Credited by</th><th>Status</th></tr></thead><tbody>
   <% orders.forEach(o => { %>
     <tr><td><%= o.id %></td><td class="small"><%= (o.paid_at || o.created_at).slice(0, 10) %></td><td class="small"><%= o.buyer_email || '—' %></td><td><%= o.product_name || o.product_slug %></td><td><%= o.display %></td><td><span class="badge steel"><%= o.attribution %></span></td><td><span class="badge <%= o.status === 'paid' ? 'active' : '' %>"><%= o.status %></span></td></tr>
   <% }) %>
   <% if (!orders.length) { %><tr><td colspan="7" class="muted">No orders credited to this partner yet.</td></tr><% } %>
   </tbody></table>
-</div>
+</div><% } %>
 <%- include('../partials/footer') %>

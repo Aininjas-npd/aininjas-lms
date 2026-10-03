@@ -11,7 +11,7 @@
 
 <div class="card"><h2>All commissions</h2>
   <table class="table"><thead><tr><th>Month</th><th>Order</th><th>Kind</th><th>Basis</th><th>Rate</th><th>Amount</th><th>Status</th></tr></thead><tbody>
-  <% rows.forEach(c => { %><tr><td><%= c.period %></td><td class="small">#<%= c.order_id %> <%= c.product_slug || '' %></td><td><%= c.kind %></td><td><%= money(c.basis_cents, c.currency) %></td><td><%= c.rate %>%</td><td><strong><%= c.display %></strong></td><td><span class="badge <%= c.status === 'paid' ? 'active' : (c.status === 'reversed' ? 'disabled' : 'pending') %>"><%= c.status %></span></td></tr><% }) %>
+  <% rows.forEach(c => { %><tr><td><%= c.period %></td><td class="small">#<%= c.order_id %> <%= c.product_slug || '' %><%= c.course_title ? ' · ' + c.course_title : '' %></td><td><%= c.kind %></td><td><%= money(c.basis_cents, c.currency) %></td><td><%= c.rate %>%</td><td><strong><%= c.display %></strong></td><td><span class="badge <%= c.status === 'paid' ? 'active' : (c.status === 'reversed' ? 'disabled' : 'pending') %>"><%= c.status %></span></td></tr><% }) %>
   <% if (!rows.length) { %><tr><td colspan="7" class="muted">Nothing yet.</td></tr><% } %>
   </tbody></table>
 </div>

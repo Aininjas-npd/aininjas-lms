@@ -8,6 +8,6 @@
   </form>
 </div>
 <div class="card"><h2>Your programme</h2>
-  <p class="small">Code <code><%= partner.code %></code> · <%= partner.rate_first %>% of first payments · <%= partner.rate_renewal %>% of renewals for <%= partner.renewal_months %> months<%= partner.discount_percent > 0 ? ' · buyers get ' + partner.discount_percent + '% off with your code' : '' %>.<br><span class="muted">Terms accepted <%= partner.terms_accepted_at ? partner.terms_accepted_at.slice(0, 10) : '—' %>. To change your rates, code or email, write to partners@aininjas.com.</span></p>
+  <p class="small"><% if (partner.type === 'content') { %>Content partner · royalties per course as shown on your overview.<% } else { %>Code <code><%= partner.code %></code> · <%= partner.rate_first %>% of first payments · <%= partner.rate_renewal %>% of renewals for <%= partner.renewal_months %> months<%= partner.discount_percent > 0 ? ' · buyers get ' + partner.discount_percent + '% off with your code' : '' %>.<% } %><br><span class="muted">Terms accepted <%= partner.terms_accepted_at ? partner.terms_accepted_at.slice(0, 10) : '—' %>. To change your rates, code or email, write to partners@aininjas.com.</span></p>
 </div>
 <%- include('../partials/footer') %>

@@ -265,8 +265,8 @@ async function fulfil(order, { session, invoice, subscription, customerId, payme
     : (p.kind === 'one_time' && p.access_days ? new Date(Date.now() + p.access_days * 86400000).toISOString().slice(0, 10) : null);
   const courses = coursesFor(p);
   db.transaction(() => {
-    db.prepare(`UPDATE orders SET status='paid', paid_at=COALESCE(paid_at, datetime('now')), user_id=?, buyer_email=?, buyer_name=COALESCE(?, buyer_name), stripe_customer_id=COALESCE(?, stripe_customer_id), stripe_subscription_id=COALESCE(?, stripe_subscription_id), stripe_invoice_id=COALESCE(?, stripe_invoice_id), stripe_payment_intent=COALESCE(?, stripe_payment_intent), amount_cents=COALESCE(?, amount_cents) WHERE id=?`)
-      .run(user.id, email, name, customerId || null, subscription ? subscription.id : null, invoice ? invoice.id : null, paymentIntent || null, session && session.amount_total != null ? session.amount_total : null, order.id);
+    db.prepare(`UPDATE orders SET status='paid', paid_at=COALESCE(paid_at, datetime('now')), user_id=?, buyer_email=?, buyer_name=COALESCE(?, buyer_name), stripe_customer_id=COALESCE(?, stripe_customer_id), stripe_subscription_id=COALESCE(?, stripe_subscription_id), stripe_invoice_id=COALESCE(?, stripe_invoice_id), stripe_payment_intent=COALESCE(?, stripe_payment_intent), amount_cents=COALESCE(?, amount_cents), tax_cents=COALESCE(?, tax_cents) WHERE id=?`)
+      .run(user.id, email, name, customerId || null, subscription ? subscription.id : null, invoice ? invoice.id : null, paymentIntent || null, session && session.amount_total != null ? session.amount_total : null, session && session.total_details && session.total_details.amount_tax != null ? session.total_details.amount_tax : (invoice && invoice.tax != null ? invoice.tax : null), order.id);
     for (const courseId of courses) {
       const result = enrol.enrolOne({ userId: user.id, courseId, startsOn: null, endsOn, source: 'purchase', by: 'stripe' });
       const enr = q.enrollment.get(user.id, courseId);
@@ -282,6 +282,7 @@ async function fulfil(order, { session, invoice, subscription, customerId, payme
     if (renewalOf) { if (!order.attributed_at) db.prepare("UPDATE orders SET attributed_at=datetime('now') WHERE id=?").run(order.id); attribution = { source: 'renewal', partner: order.partner_id ? partners.partnerById(order.partner_id) : null }; }
     else attribution = partners.attribute(order, { session, buyerEmail: email, user });
     commission = partners.bookCommission(order, { renewalOf });
+    partners.bookRoyalties(order, courses, { renewalOf });   // content partners: on every sale and renewal, whoever sold it
   } catch (e) { console.error('[partners] attribution failed for order ' + order.id + ': ' + e.message); }
   plugins.emit('order:paid', { orderId: order.id, userId: user.id, productSlug: p.slug, courseIds: courses, created, partnerId: attribution && attribution.partner ? attribution.partner.id : null });
   return { user, created, invite, courses, attribution, commission };

@@ -1,0 +1,8 @@
+<%- include('../partials/header') %>
+<h1>Your royalties</h1>
+<p class="muted small">One line per sale or renewal of a product that includes one of your courses. Buyers and sellers are not named — you see the sale, the course's share of the net amount, and your royalty on it.</p>
+<table class="table"><thead><tr><th>Order</th><th>When</th><th>Product</th><th>Course</th><th>Course share</th><th>Rate</th><th>Royalty</th><th>Status</th></tr></thead><tbody>
+<% sales.forEach(r => { %><tr><td>#<%= r.order_id %></td><td class="small"><%= (r.paid_at || '').slice(0, 10) %></td><td><%= r.product_name || r.product_slug %><% if (r.order_kind === 'yearly') { %> <span class="muted small">yearly</span><% } %></td><td><%= r.course_title || '' %></td><td><%= r.share %></td><td><%= r.rate %>%</td><td><strong><%= r.display %></strong></td><td><span class="badge <%= r.status === 'paid' ? 'active' : (r.status === 'reversed' ? 'disabled' : 'pending') %>"><%= r.status %></span></td></tr><% }) %>
+<% if (!sales.length) { %><tr><td colspan="8" class="muted">No royalties yet.</td></tr><% } %>
+</tbody></table>
+<%- include('../partials/footer') %>

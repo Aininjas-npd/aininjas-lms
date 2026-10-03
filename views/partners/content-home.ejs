@@ -1,0 +1,23 @@
+<%- include('../partials/header') %>
+<div class="row between wrap"><h1>Hello, <%= partner.contact_name || partner.name %></h1><span class="badge <%= partner.status === 'active' ? 'active' : 'pending' %>"><%= partner.status %></span></div>
+<% if (partner.status === 'paused') { %><div class="flash error">Your partnership is paused: no new royalties are being booked. Write to partners@aininjas.com.</div><% } %>
+<div class="row gap wrap" style="align-items:stretch">
+  <div class="card" style="flex:2;min-width:300px"><h2>Your courses</h2>
+    <table class="table"><thead><tr><th>Course</th><th>Your royalty</th></tr></thead><tbody>
+    <% courses.forEach(c => { %><tr><td><%= c.course_title %></td><td><strong><%= c.percent %>%</strong> of the course's share of each sale</td></tr><% }) %>
+    <% if (!courses.length) { %><tr><td colspan="2" class="muted">No courses assigned yet.</td></tr><% } %>
+    </tbody></table>
+    <p class="small muted">Every time a product that includes your course is bought or renewed — by anyone, through any channel — the net sale (after discounts, before tax) is split equally across the product's courses and you earn your percentage of your course's share.</p>
+  </div>
+  <div class="card" style="flex:1;min-width:220px"><h2>At a glance</h2>
+    <p class="small">Paid out to you <strong><%= money(stats.paid, 'usd') %></strong><br>Awaiting payment <strong><%= money(stats.owed, 'usd') %></strong><br>Earned in total <%= money(stats.earned, 'usd') %></p>
+  </div>
+</div>
+<div class="card"><h2>Recent royalties</h2>
+  <table class="table"><thead><tr><th>When</th><th>Product</th><th>Course</th><th>Course share</th><th>Your royalty</th></tr></thead><tbody>
+  <% recent.forEach(r => { %><tr><td class="small"><%= (r.paid_at || '').slice(0, 10) %></td><td><%= r.product_name || r.product_slug %><% if (r.order_kind === 'yearly') { %> <span class="muted small">yearly</span><% } %></td><td><%= r.course_title || '' %></td><td><%= r.share %></td><td><strong><%= r.display %></strong> <span class="badge <%= r.status === 'paid' ? 'active' : (r.status === 'reversed' ? 'disabled' : 'pending') %>"><%= r.status %></span></td></tr><% }) %>
+  <% if (!recent.length) { %><tr><td colspan="5" class="muted">No sales of your courses yet.</td></tr><% } %>
+  </tbody></table>
+  <p class="small"><a href="/partners/sales">All royalties →</a> · <a href="/partners/commissions">Statements →</a></p>
+</div>
+<%- include('../partials/footer') %>

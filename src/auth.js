@@ -120,6 +120,7 @@ router.get('/api/sso/export', (req, res) => {
 // ---------- middleware ----------
 function currentUser(req, res, next) {
   req.user = req.session.userId ? q.userById.get(req.session.userId) : null;
+  if (req.user && req.user.role === 'partner') { const pr = require('./partners').partnerByUser(req.user); req.user.partner_type = pr ? pr.type : null; }   // the portal menu differs for content partners
   res.locals.user = req.user;
   req.actor = req.user && req.session.actor ? req.session.actor : null;   // set when an administrator is "viewing as" this user
   res.locals.actor = req.actor;

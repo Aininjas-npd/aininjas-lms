@@ -123,6 +123,22 @@ async function purchase(db, slug, { cookie, email }) {
   html = await (await admin('/admin/payouts/' + pys[0].id)).text();
   ok('admin statement view shows the partner email and payout details area', /ahmed@partner.test/.test(html) && /TRX-1001/.test(html));
 
+  console.log('content partner portal');
+  await admin('/admin/partners', form({ name: 'Author Co', code: 'AUTHOR', type: 'content', email: 'author@partner.test' }));
+  const authorP = db.prepare("SELECT * FROM partners WHERE code='AUTHOR'").get();
+  await admin('/admin/partners/' + authorP.id + '/royalties', form({ course_id: '1', percent: '25' }));
+  await admin('/admin/partners/' + authorP.id + '/invite', { method: 'POST' });
+  db.prepare('UPDATE users SET password_hash=? WHERE email=?').run(bcrypt.hashSync('partner123', 4), 'author@partner.test');
+  await purchase(db, 'course-one', { email: 'reader@buyer.test' });
+  const author = client();
+  await author('/login', form({ email: 'author@partner.test', password: 'partner123' }));
+  await author('/partners/terms', form({ accept: 'on' }));
+  html = await (await author('/partners')).text();
+  ok('content partner overview lists their course, royalty and recent royalties without buyer identity', /Course One/.test(html) && /<strong>25%<\/strong>/.test(html) && /\$25/.test(html) && !/buyer\.test/.test(html) && !/\/p\/AUTHOR/.test(html));
+  ok('menu says Royalties and has no Deals', /Royalties/.test(html) && !/href="\/partners\/deals"/.test(html));
+  r = await author('/partners/deals');
+  ok('deals page redirects away for content partners', r.status === 302);
+
   console.log('settings and deletion');
   await partner('/partners/settings', form({ payout_details: 'PayPal: ahmed@partner.test' }));
   ok('payout details saved', db.prepare('SELECT payout_details d FROM partners WHERE id=1').get().d === 'PayPal: ahmed@partner.test');

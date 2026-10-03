@@ -13,9 +13,9 @@ function navFor(user, path = '', pluginNav = [], viewing = false) {
   const on = (test) => typeof test === 'function' ? test(path) : path === test;
   if (user.role === 'partner') {   // the partner portal is the whole menu for a partner
     items.push({ href: '/partners', label: 'Overview', on: on('/partners') });
-    items.push({ href: '/partners/sales', label: 'Sales', on: on('/partners/sales') });
+    items.push({ href: '/partners/sales', label: user.partner_type === 'content' ? 'Royalties' : 'Sales', on: on('/partners/sales') });
     items.push({ href: '/partners/commissions', label: 'Commissions', on: on(p => p.startsWith('/partners/commissions') || p.startsWith('/partners/statements')) });
-    items.push({ href: '/partners/deals', label: 'Deals', on: on('/partners/deals') });
+    if (user.partner_type !== 'content') items.push({ href: '/partners/deals', label: 'Deals', on: on('/partners/deals') });
     items.push({ href: '/partners/settings', label: 'Settings', on: on('/partners/settings') });
     return items;
   }

@@ -20,7 +20,7 @@ const { db, q } = require('./db');
 const WINDOW_DAYS = Math.max(1, +process.env.PARTNER_LINK_DAYS || 60);          // referral link / cookie validity
 const CLAWBACK_DAYS = Math.max(0, +process.env.PARTNER_CLAWBACK_DAYS || 30);    // refunds inside this reverse the commission
 const DEAL_DAYS = Math.max(1, +process.env.PARTNER_DEAL_DAYS || 180);           // a registered deal expires after this
-const DEFAULT_RATES = { affiliate: { first: 20, renewal: 10 }, agent: { first: 15, renewal: 7.5 } };
+const DEFAULT_RATES = { affiliate: { first: 20, renewal: 10 }, agent: { first: 15, renewal: 7.5 }, content: { first: 0, renewal: 0 } };   // content partners earn royalties per course, not sales commission
 const MAIN_SITE = (process.env.MAIN_SITE_URL || 'https://www.aininjas.com').replace(/\/$/, '');
 
 /* ---------- schema ---------- */
@@ -89,6 +89,14 @@ CREATE TABLE IF NOT EXISTS payouts (                 -- Phase 3: one statement p
   note            TEXT,
   UNIQUE (partner_id, period)
 );
+CREATE TABLE IF NOT EXISTS course_royalties (            -- content partners: % of the net sale that each course earns its author
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  course_id       INTEGER NOT NULL,
+  partner_id      INTEGER NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+  percent         REAL NOT NULL,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (course_id, partner_id)
+);
 `);
 const addCol = (table, col, type) => { if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`); };
 addCol('partners', 'user_id', 'INTEGER');                 // the partner's Academy account (role partner), for the portal
@@ -96,8 +104,9 @@ addCol('partners', 'terms_accepted_at', 'TEXT');
 addCol('partners', 'payout_details', 'TEXT');             // how they want to be paid, in their words
 addCol('deal_registrations', 'source', "TEXT NOT NULL DEFAULT 'admin'");   // admin | partner (portal)
 addCol('commissions', 'payout_id', 'INTEGER');
+addCol('commissions', 'course_id', 'INTEGER');
 /** orders columns this module adds; called by commerce.js once the orders table exists. */
-function ensureOrderColumns() { addCol('orders', 'attributed_at', 'TEXT'); addCol('orders', 'promotion_code', 'TEXT'); }
+function ensureOrderColumns() { addCol('orders', 'attributed_at', 'TEXT'); addCol('orders', 'promotion_code', 'TEXT'); addCol('orders', 'tax_cents', 'INTEGER'); }
 
 /* ---------- partners ---------- */
 const CODE_RE = /^[A-Z0-9][A-Z0-9-]{2,19}$/;
@@ -118,14 +127,14 @@ async function savePartner(input, { by } = {}) {
   const code = String(input.code || '').trim().toUpperCase();
   if (!CODE_RE.test(code)) throw new Error('Code: 3–20 capital letters, digits or dashes (e.g. AHMED20) — it goes in links and at checkout');
   const name = String(input.name || '').trim(); if (!name) throw new Error('Name is required');
-  const type = input.type === 'agent' ? 'agent' : 'affiliate';
+  const type = ['agent', 'content'].includes(input.type) ? input.type : 'affiliate';
   const num = (v, dflt) => { if (v === undefined || v === null || String(v).trim() === '') return dflt; const n = Number(v); if (!(n >= 0 && n <= 100)) throw new Error('Rates and discounts are percentages between 0 and 100'); return n; };
   const existing = input.id ? partnerById(input.id) : null;
   const clash = partnerByCode(code); if (clash && (!existing || clash.id !== existing.id)) throw new Error('That code is already used by ' + clash.name);
   const fields = {
     code, name, type, contact_name: String(input.contact_name || '').trim() || null, email: String(input.email || '').trim().toLowerCase() || null,
     rate_first: num(input.rate_first, DEFAULT_RATES[type].first), rate_renewal: num(input.rate_renewal, DEFAULT_RATES[type].renewal),
-    renewal_months: Math.max(0, Math.min(120, +input.renewal_months || 12)), discount_percent: num(input.discount_percent, 0),
+    renewal_months: type === 'content' ? 0 : Math.max(0, Math.min(120, +input.renewal_months || 12)), discount_percent: type === 'content' ? 0 : num(input.discount_percent, 0),
     status: ['active', 'paused', 'ended'].includes(input.status) ? input.status : 'active', notes: String(input.notes || '').trim() || null,
   };
   let id;
@@ -194,7 +203,7 @@ function attribute(order, { session, promotionCodeId, partnerRef, buyerEmail, us
   if (order.attribution && order.partner_id !== undefined && order.attributed_at) return { partner: order.partner_id ? partnerById(order.partner_id) : null, source: order.attribution, already: true };
   const email = String(buyerEmail || order.buyer_email || '').toLowerCase();
   let partner = null, source = 'house', deal = null, detail = null;
-  const usable = p => p && p.status === 'active' && !(p.email && email && p.email === email);   // a partner buying for themselves is a house sale
+  const usable = p => p && p.status === 'active' && p.type !== 'content' && !(p.email && email && p.email === email);   // a partner buying for themselves is a house sale; content partners are paid royalties, not attribution
   // 1. registered deal
   deal = matchDeal({ email, schoolSlug: order.school_slug });
   if (deal && usable(partnerById(deal.partner_id))) { partner = partnerById(deal.partner_id); source = 'deal'; detail = `deal ${deal.id}`; }
@@ -270,20 +279,22 @@ function setCommissionStatus(id, status, { by } = {}) {
 }
 function bulkStatus(ids, status, opts) { let n = 0; for (const id of ids) { try { setCommissionStatus(id, status, opts); n++; } catch {} } return n; }
 
-function listCommissions({ partnerId, period: per, status } = {}) {
+function listCommissions({ partnerId, period: per, status, kind } = {}) {
   const where = [], args = [];
   if (partnerId) { where.push('c.partner_id=?'); args.push(partnerId); }
   if (per) { where.push('c.period=?'); args.push(per); }
   if (status) { where.push('c.status=?'); args.push(status); }
-  return db.prepare(`SELECT c.*, p.name partner_name, p.code partner_code, o.product_slug, o.buyer_email, o.attribution, o.paid_at FROM commissions c JOIN partners p ON p.id=c.partner_id LEFT JOIN orders o ON o.id=c.order_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY c.period DESC, c.id DESC`).all(...args);
+  if (kind === 'royalty') where.push("c.kind='royalty'"); else if (kind === 'sales') where.push("c.kind<>'royalty'");
+  return db.prepare(`SELECT c.*, p.name partner_name, p.code partner_code, p.type partner_type, o.product_slug, o.buyer_email, o.attribution, o.paid_at, co.title course_title FROM commissions c JOIN partners p ON p.id=c.partner_id LEFT JOIN orders o ON o.id=c.order_id LEFT JOIN courses co ON co.id=c.course_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY c.period DESC, c.id DESC`).all(...args);
 }
 /** Per partner per month: what is pending, approved, paid. */
 /** Per partner per month: earned (gross of everything not reversed), reversed, and what is pending / approved / paid. */
-function summary({ period: per, partnerId, status } = {}) {
+function summary({ period: per, partnerId, status, kind } = {}) {
   const where = [], args = [];
   if (per) { where.push('c.period=?'); args.push(per); }
   if (partnerId) { where.push('c.partner_id=?'); args.push(partnerId); }
   if (status) { where.push('c.status=?'); args.push(status); }
+  if (kind === 'royalty') where.push("c.kind='royalty'"); else if (kind === 'sales') where.push("c.kind<>'royalty'");
   return db.prepare(`SELECT c.period, p.id partner_id, p.name partner_name, p.code partner_code, p.type,
     SUM(CASE WHEN c.status<>'reversed' THEN c.amount_cents ELSE 0 END) net_cents,
     SUM(CASE WHEN c.status='reversed' THEN c.amount_cents ELSE 0 END) reversed_cents,
@@ -297,7 +308,7 @@ const periods = () => db.prepare('SELECT DISTINCT period FROM commissions ORDER 
 const partnerOrders = partnerId => db.prepare('SELECT o.*, pr.name product_name FROM orders o LEFT JOIN products pr ON pr.id=o.product_id WHERE o.partner_id=? ORDER BY o.id DESC LIMIT 200').all(partnerId);
 
 function csv(rows) {
-  const cols = ['id', 'period', 'partner_code', 'partner_name', 'order_id', 'kind', 'product_slug', 'paid_at', 'basis_cents', 'rate', 'amount_cents', 'currency', 'status', 'note'];
+  const cols = ['id', 'period', 'partner_code', 'partner_name', 'order_id', 'kind', 'product_slug', 'course_title', 'paid_at', 'basis_cents', 'rate', 'amount_cents', 'currency', 'status', 'note'];
   const esc = v => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   return [cols.join(','), ...rows.map(r => cols.map(c => esc(r[c])).join(','))].join('\n') + '\n';
 }
@@ -311,6 +322,53 @@ function anonymiseOrders(userId, email) {
   const hash = email ? crypto.createHash('sha256').update(String(email).toLowerCase()).digest('hex').slice(0, 12) : null;
   return db.prepare("UPDATE orders SET user_id=NULL, buyer_email=?, buyer_name=NULL, metadata=NULL WHERE user_id=? OR (buyer_email IS NOT NULL AND buyer_email=?)").run(hash ? `deleted-${hash}@removed.invalid` : null, userId, String(email || '').toLowerCase()).changes;
 }
+
+/* ---------- content partners: royalties per course ---------- */
+/** Course → content partner royalties. A product's net sale is split equally across the courses it grants; each
+    course's royalty % applies to that course's share. Paid on every sale and every renewal while the product is bought. */
+const royaltiesForCourse = courseId => db.prepare('SELECT r.*, p.name partner_name, p.code partner_code, p.status partner_status FROM course_royalties r JOIN partners p ON p.id=r.partner_id WHERE r.course_id=? ORDER BY p.name').all(courseId);
+const royaltiesForPartner = partnerId => db.prepare('SELECT r.*, c.title course_title, c.slug course_slug FROM course_royalties r JOIN courses c ON c.id=r.course_id WHERE r.partner_id=? ORDER BY c.title').all(partnerId);
+function setCourseRoyalty(courseId, partnerId, percent) {
+  const p = partnerById(partnerId); if (!p || p.type !== 'content') throw new Error('Pick a content partner');
+  const pct = Number(percent); if (!(pct > 0 && pct <= 100)) throw new Error('Royalty must be a percentage between 0 and 100');
+  if (!db.prepare('SELECT 1 FROM courses WHERE id=?').get(courseId)) throw new Error('No such course');
+  const total = db.prepare('SELECT COALESCE(SUM(percent),0) t FROM course_royalties WHERE course_id=? AND partner_id<>?').get(courseId, partnerId).t + pct;
+  if (total > 100) throw new Error(`Royalties on this course would add up to ${total}%`);
+  db.prepare('INSERT INTO course_royalties (course_id, partner_id, percent) VALUES (?, ?, ?) ON CONFLICT(course_id, partner_id) DO UPDATE SET percent=excluded.percent').run(courseId, partnerId, pct);
+  q.logEvent.run(null, courseId, null, 'royalty_set', JSON.stringify({ partner_id: partnerId, percent: pct }));
+}
+function removeCourseRoyalty(courseId, partnerId) { db.prepare('DELETE FROM course_royalties WHERE course_id=? AND partner_id=?').run(courseId, partnerId); }
+/** What a product pays away in royalties, as a % of its net sale (for the admin warning). */
+function productRoyaltyPercent(courseIds) {
+  if (!courseIds.length) return 0;
+  const share = 100 / courseIds.length;
+  return courseIds.reduce((sum, cid) => sum + royaltiesForCourse(cid).filter(r => r.partner_status === 'active').reduce((s, r) => s + r.percent, 0) * share / 100, 0);
+}
+/** Book royalty rows for a paid order (first sale or renewal). Idempotent per order. Net = amount paid minus tax. */
+function bookRoyalties(order, courseIds, { renewalOf } = {}) {
+  const fresh = db.prepare('SELECT * FROM orders WHERE id=?').get(order.id);
+  if (!fresh || fresh.status !== 'paid' || !courseIds.length) return [];
+  if (db.prepare("SELECT 1 FROM commissions WHERE order_id=? AND kind='royalty'").get(fresh.id)) return [];
+  const net = Math.max(0, fresh.amount_cents - (fresh.tax_cents || 0));
+  const share = net / courseIds.length;
+  const made = [];
+  db.transaction(() => {
+    for (const cid of courseIds) {
+      for (const r of royaltiesForCourse(cid)) {
+        if (r.partner_status !== 'active') continue;
+        const amount = Math.round(share * r.percent / 100);
+        if (amount <= 0) continue;
+        const id = db.prepare("INSERT INTO commissions (partner_id, order_id, kind, basis_cents, rate, amount_cents, currency, period, course_id, note) VALUES (?, ?, 'royalty', ?, ?, ?, ?, ?, ?, ?)")
+          .run(r.partner_id, fresh.id, Math.round(share), r.percent, amount, fresh.currency, period(fresh.paid_at), cid, (renewalOf ? 'renewal · ' : '') + 'course share of net ' + (net / 100).toFixed(2)).lastInsertRowid;
+        made.push(db.prepare('SELECT * FROM commissions WHERE id=?').get(id));
+      }
+    }
+  })();
+  return made;
+}
+/** A content partner's view: their courses' share of each order, no buyer or seller identity. */
+const partnerRoyaltySales = partnerId => db.prepare(`SELECT c.id, c.order_id, c.period, c.basis_cents, c.rate, c.amount_cents, c.currency, c.status, c.note, co.title course_title, o.product_slug, o.kind order_kind, o.paid_at, o.status order_status, pr.name product_name
+  FROM commissions c LEFT JOIN courses co ON co.id=c.course_id LEFT JOIN orders o ON o.id=c.order_id LEFT JOIN products pr ON pr.id=o.product_id WHERE c.partner_id=? AND c.kind='royalty' ORDER BY c.id DESC LIMIT 500`).all(partnerId);
 
 /* ---------- Phase 3: partner accounts, statements, portal ---------- */
 let accountsApi = null;
@@ -375,7 +433,7 @@ function createStatements(per, { by } = {}) {
 }
 const payoutById = id => db.prepare('SELECT py.*, p.name partner_name, p.code partner_code, p.email partner_email, p.payout_details, p.type partner_type FROM payouts py JOIN partners p ON p.id=py.partner_id WHERE py.id=?').get(id);
 const listPayouts = ({ partnerId, status } = {}) => db.prepare(`SELECT py.*, p.name partner_name, p.code partner_code FROM payouts py JOIN partners p ON p.id=py.partner_id WHERE 1=1 ${partnerId ? 'AND py.partner_id=@partnerId' : ''} ${status ? 'AND py.status=@status' : ''} ORDER BY py.period DESC, p.name`).all({ partnerId, status });
-const payoutLines = id => db.prepare('SELECT c.*, o.product_slug, o.paid_at order_paid_at, o.kind order_kind FROM commissions c LEFT JOIN orders o ON o.id=c.order_id WHERE c.payout_id=? ORDER BY c.id').all(id);
+const payoutLines = id => db.prepare('SELECT c.*, o.product_slug, o.paid_at order_paid_at, o.kind order_kind, co.title course_title FROM commissions c LEFT JOIN orders o ON o.id=c.order_id LEFT JOIN courses co ON co.id=c.course_id WHERE c.payout_id=? ORDER BY c.id').all(id);
 function markPayoutPaid(id, { reference, by } = {}) {
   const py = payoutById(id); if (!py) throw new Error('No such statement');
   if (py.status === 'paid') throw new Error('Already paid');
@@ -391,4 +449,4 @@ function voidPayout(id) {
 /** Months whose approved commissions are not on a statement yet (what the admin can issue). */
 const unstatementedPeriods = () => db.prepare("SELECT c.period, COUNT(DISTINCT c.partner_id) partners, SUM(c.amount_cents) cents, GROUP_CONCAT(DISTINCT p.name) names FROM commissions c JOIN partners p ON p.id=c.partner_id WHERE c.payout_id IS NULL AND (c.status='approved' OR (c.kind='clawback' AND c.status<>'reversed')) GROUP BY c.period ORDER BY c.period DESC").all().map(r => ({ ...r, names: String(r.names || '').split(',').join(', ') }));
 
-module.exports = { ensureOrderColumns, partnerByUser, proposedDeals, setAccountsApi, linkUser, invitePartner, acceptTerms, savePayoutDetails, partnerSales, partnerStats, createStatements, payoutById, listPayouts, payoutLines, markPayoutPaid, voidPayout, unstatementedPeriods, WINDOW_DAYS, CLAWBACK_DAYS, DEAL_DAYS, DEFAULT_RATES, MAIN_SITE, setStripe, partnerById, partnerByCode, partnerByPromotionCode, listPartners, savePartner, syncPromotionCode, linkFor, registerDeal, listDeals, setDealStatus, matchDeal, attribute, bookCommission, clawback, setCommissionStatus, bulkStatus, listCommissions, commissionsForOrder, summary, periods, partnerOrders, csv, click, anonymiseOrders };
+module.exports = { royaltiesForCourse, royaltiesForPartner, setCourseRoyalty, removeCourseRoyalty, productRoyaltyPercent, bookRoyalties, partnerRoyaltySales, ensureOrderColumns, partnerByUser, proposedDeals, setAccountsApi, linkUser, invitePartner, acceptTerms, savePayoutDetails, partnerSales, partnerStats, createStatements, payoutById, listPayouts, payoutLines, markPayoutPaid, voidPayout, unstatementedPeriods, WINDOW_DAYS, CLAWBACK_DAYS, DEAL_DAYS, DEFAULT_RATES, MAIN_SITE, setStripe, partnerById, partnerByCode, partnerByPromotionCode, listPartners, savePartner, syncPromotionCode, linkFor, registerDeal, listDeals, setDealStatus, matchDeal, attribute, bookCommission, clawback, setCommissionStatus, bulkStatus, listCommissions, commissionsForOrder, summary, periods, partnerOrders, csv, click, anonymiseOrders };

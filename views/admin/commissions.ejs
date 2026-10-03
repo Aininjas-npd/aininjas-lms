@@ -1,10 +1,11 @@
 <%- include('../partials/header') %>
-<div class="row between wrap"><h1>Commissions</h1><div class="row gap"><a class="btn small ghost" href="/admin/partners">Partners →</a><a class="btn small ghost" href="/admin/payouts">Payouts →</a><a class="btn small ghost" href="/admin/commissions?format=csv<%= period ? '&period=' + period : '' %><%= partnerId ? '&partner=' + partnerId : '' %><%= status ? '&status=' + status : '' %>">Download CSV</a></div></div>
-<p class="muted small">One row per paid order credited to a partner. <b>pending</b> = earned, waiting for the refund window (<%= clawbackDays %> days) · <b>approved</b> = cleared for the next payout · <b>paid</b> = on a statement that has been paid (Payouts page) · <b>reversed</b> = refunded in time. Monthly totals below are per partner per month the order was paid.</p>
+<div class="row between wrap"><h1>Commissions</h1><div class="row gap"><a class="btn small ghost" href="/admin/partners">Partners →</a><a class="btn small ghost" href="/admin/payouts">Payouts →</a><a class="btn small ghost" href="/admin/commissions?format=csv<%= period ? '&period=' + period : '' %><%= partnerId ? '&partner=' + partnerId : '' %><%= status ? '&status=' + status : '' %><%= kind ? '&kind=' + kind : '' %>">Download CSV</a></div></div>
+<p class="muted small">One row per paid order credited to a partner, plus one <b>royalty</b> row per content partner whose course the order granted. <b>pending</b> = earned, waiting for the refund window (<%= clawbackDays %> days) · <b>approved</b> = cleared for the next payout · <b>paid</b> = on a statement that has been paid (Payouts page) · <b>reversed</b> = refunded in time. Monthly totals below are per partner per month the order was paid.</p>
 
 <form class="row gap wrap" method="get" style="margin-bottom:10px">
   <select name="period" onchange="this.form.submit()"><option value="">All months</option><% periods.forEach(m => { %><option value="<%= m %>" <%= period === m ? 'selected' : '' %>><%= m %></option><% }) %></select>
   <select name="partner" onchange="this.form.submit()"><option value="">All partners</option><% partnersList.forEach(x => { %><option value="<%= x.id %>" <%= partnerId === x.id ? 'selected' : '' %>><%= x.name %> (<%= x.code %>)</option><% }) %></select>
+  <select name="kind" onchange="this.form.submit()"><option value="">Sales commissions and royalties</option><option value="sales" <%= kind === 'sales' ? 'selected' : '' %>>Sales commissions only</option><option value="royalty" <%= kind === 'royalty' ? 'selected' : '' %>>Royalties only</option></select>
   <select name="status" onchange="this.form.submit()"><option value="">Any status</option><% ['pending','approved','paid','reversed'].forEach(s => { %><option value="<%= s %>" <%= status === s ? 'selected' : '' %>><%= s %></option><% }) %></select>
 </form>
 
@@ -15,11 +16,11 @@
 <% } %>
 
 <form method="post" action="/admin/commissions/status">
-<input type="hidden" name="period" value="<%= period %>"><input type="hidden" name="partner" value="<%= partnerId || '' %>"><input type="hidden" name="status_filter" value="<%= status %>">
+<input type="hidden" name="period" value="<%= period %>"><input type="hidden" name="partner" value="<%= partnerId || '' %>"><input type="hidden" name="status_filter" value="<%= status %>"><input type="hidden" name="kind" value="<%= kind %>">
 <table class="table"><thead><tr><th></th><th>Month</th><th>Partner</th><th>Order</th><th>Kind</th><th>Basis</th><th>Rate</th><th>Amount</th><th>Status</th></tr></thead><tbody>
 <% rows.forEach(c => { %>
   <tr><td><% if (['pending','approved'].includes(c.status)) { %><input type="checkbox" name="ids" value="<%= c.id %>" data-status="<%= c.status %>" onchange="syncBulk()"><% } %></td><td><%= c.period %></td><td><a href="/admin/partners/<%= c.partner_id %>"><%= c.partner_name %></a></td>
-    <td class="small">#<%= c.order_id %> <%= c.product_slug || '' %><br><span class="muted"><%= c.buyer_email || '' %> · <%= c.attribution || '' %><%= c.paid_at ? ' · ' + c.paid_at.slice(0, 10) : '' %></span></td>
+    <td class="small">#<%= c.order_id %> <%= c.product_slug || '' %><%= c.course_title ? ' · ' + c.course_title : '' %><br><span class="muted"><%= c.buyer_email || '' %> · <%= c.attribution || '' %><%= c.paid_at ? ' · ' + c.paid_at.slice(0, 10) : '' %></span></td>
     <td><%= c.kind %></td><td><%= money(c.basis_cents, c.currency) %></td><td><%= c.rate %>%</td><td><strong><%= c.display %></strong></td>
     <td><span class="badge <%= c.status === 'paid' ? 'active' : (c.status === 'reversed' ? 'disabled' : 'pending') %>"><%= c.status %></span><% if (c.note) { %><br><span class="muted small"><%= c.note %></span><% } %></td></tr>
 <% }) %>

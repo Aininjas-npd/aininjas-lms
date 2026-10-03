@@ -136,6 +136,37 @@ async function purchase(db, slug, { ref, cookie, email, promo } = {}) {
   ok('partners list shows earned and owed', /Ahmed Khan/.test(list) && /\$/.test(list));
   ok('attribution never written to a student profile beyond partner_id/attributed_at', !db.prepare('PRAGMA table_info(users)').all().some(col => /commission|coupon|promo/.test(col.name)));
 
+  console.log('content partners');
+  r = await call('/admin/partners', form({ name: 'Course Author Co', code: 'AUTHOR', type: 'content', email: 'author@partner.test' }));
+  const author = db.prepare("SELECT * FROM partners WHERE code='AUTHOR'").get();
+  ok('content partner created with no coupon and no rates', author && author.type === 'content' && !author.stripe_promotion_code_id && author.discount_percent === 0);
+  r = await call('/admin/partners/' + author.id + '/royalties', form({ course_id: '1', percent: '25' }));
+  ok('royalty 25% set on Course One', db.prepare('SELECT percent FROM course_royalties WHERE course_id=1 AND partner_id=?').get(author.id).percent === 25);
+  r = await call('/admin/partners/' + author.id + '/royalties', form({ course_id: '1', percent: '80' }));
+  ok('saving again replaces the percentage', db.prepare('SELECT percent FROM course_royalties WHERE course_id=1 AND partner_id=?').get(author.id).percent === 80);
+  await call('/admin/partners/' + author.id + '/royalties', form({ course_id: '1', percent: '25' }));
+  p = await purchase(db, 'course-one', { cookie: 'AHMED20', email: 'royal1@buyer.test' });
+  let roy = db.prepare("SELECT * FROM commissions WHERE order_id=? AND kind='royalty'").get(p.order.id);
+  ok('house/affiliate sale of a 1-course product books 25% of net $100 = $25 to the author, alongside the affiliate commission', roy && roy.partner_id === author.id && roy.amount_cents === 2500 && db.prepare("SELECT COUNT(*) n FROM commissions WHERE order_id=?").get(p.order.id).n === 2);
+  p = await purchase(db, 'course-one', { email: 'royal2@buyer.test', promo: 'AHMED20' });
+  roy = db.prepare("SELECT * FROM commissions WHERE order_id=? AND kind='royalty'").get(p.order.id);
+  ok('discounted sale: royalty on the net $90 = $22.50', roy && roy.amount_cents === 2250 && roy.basis_cents === 9000);
+  p = await purchase(db, 'everything', { email: 'royal3@buyer.test' });
+  roy = db.prepare("SELECT * FROM commissions WHERE order_id=? AND kind='royalty'").get(p.order.id);
+  ok('2-course bundle at $200: Course One share $100 → $25 royalty', roy && roy.basis_cents === 10000 && roy.amount_cents === 2500);
+  const sub2 = p.order.stripe_subscription_id;
+  h = await hook({ id: 'evt_roy_renew', type: 'invoice.paid', data: { object: { id: 'in_roy_renew', subscription: sub2, amount_paid: 20000, currency: 'usd' } } });
+  const renewRoy = db.prepare("SELECT c.* FROM commissions c JOIN orders o ON o.id=c.order_id WHERE o.stripe_invoice_id='in_roy_renew' AND c.kind='royalty'").get();
+  ok('renewal books the royalty again (no time limit)', renewRoy && renewRoy.amount_cents === 2500);
+  const royOrder = db.prepare("SELECT * FROM orders WHERE buyer_email='royal1@buyer.test'").get();
+  h = await hook({ id: 'evt_roy_refund', type: 'charge.refunded', data: { object: { id: 'ch_roy', payment_intent: royOrder.stripe_payment_intent, amount: 10000, amount_refunded: 10000 } } });
+  ok('refund reverses the royalty too', db.prepare("SELECT status FROM commissions WHERE order_id=? AND kind='royalty'").get(royOrder.id).status === 'reversed');
+  ok('content partner never gets sales attribution', !db.prepare('SELECT 1 FROM orders WHERE partner_id=?').get(author.id));
+  var html2 = await (await call('/admin/commissions?kind=royalty')).text();
+  ok('commissions page filters royalties and names the course', /Course One/.test(html2) && !/>first</.test(html2));
+  var html3 = await (await call('/admin/products')).text();
+  ok('products page shows royalty payout %', /royalties 25% of net sale/.test(html3) && /royalties 12\.5% of net sale/.test(html3));
+
   console.log('deletion');
   const victim = db.prepare("SELECT * FROM users WHERE email='sub@buyer.test'").get();
   r = await call('/admin/users/' + victim.id + '/delete', { method: 'POST' });
